@@ -1,0 +1,18 @@
+{
+    "include": ["src"],
+    "exclude": [
+        "**/__pycache__",
+        ".git",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".venv",
+        "build",
+        "dist",
+        "typings",
+        "tests"
+    ],
+    "extraPaths": ["src"],
+    "typeCheckingMode": "strict",
+    "pythonVersion": "3.13",
+    "stubPath": "typings"
+}

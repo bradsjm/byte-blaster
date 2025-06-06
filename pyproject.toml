@@ -1,0 +1,75 @@
+[project]
+name = "byte-blaster"
+version = "1.0.0"
+description = "Python implementation of the EMWIN ByteBlaster protocol for receiving weather data"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pytest>=8.4.0",
+]
+license = { file = "LICENSE" }
+authors = [{ name = "ByteBlaster Python Team", email = "support@example.com" }]
+keywords = ["emwin", "byteblaster", "weather", "noaa", "quickblocktransfer"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+
+[dependency-groups]
+dev = ["basedpyright>=1.29.2", "ruff>=0.11.12"]
+test = ["pytest-asyncio>=0.23.0", "pytest-mock>=3.14.0", "pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+addopts = ["--strict-markers", "--strict-config"]
+filterwarnings = ["error", "ignore::UserWarning", "ignore::DeprecationWarning"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+minversion = "8.0"
+python_classes = ["Test*"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "typings",
+    "tests",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN",     # Let Pyright handle annotation checks
+    "D203",    # Conflicts with D211 (no blank line before class docstring)
+    "D213",    # Conflicts with D212 (multi-line summary on first line)
+    "PLR2004", # Magic number literals
+    "COM812",  # Use of `print` in production code
+]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 120
+
+[tool.ruff.format]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]   # Allow asserts in test files
+"example.py" = ["T201"] # Allow print statements in examples
