@@ -1,14 +1,15 @@
-# ByteBlaster Python Client
+# EMWIN QBT Client (ByteBlaster)
 
-A comprehensive Python implementation of the EMWIN (Emergency Managers Weather Information Network) ByteBlaster protocol for receiving real-time weather data from the National Weather Service.
+A comprehensive Python implementation of the **EMWIN Quick Block Transfer (QBT)** protocol for receiving real-time weather data from the National Weather Service. This protocol is also commonly known as **ByteBlaster**.
 
 ## Overview
 
-The ByteBlaster protocol uses Quick Block Transfer (QBT) to efficiently deliver weather data, forecasts, warnings, and satellite imagery. This Python client provides a robust, asynchronous implementation with automatic reconnection, server failover, and comprehensive error handling.
+The EMWIN QBT protocol uses Quick Block Transfer (QBT) to efficiently deliver weather data, forecasts, warnings, and satellite imagery. This Python client provides a robust, asynchronous implementation with automatic reconnection, server failover, and comprehensive error handling.
 
 ## Features
 
-- **Complete Protocol Implementation**: Full support for ByteBlaster protocol v1 and v2
+- **Complete Protocol Implementation**: Full support for EMWIN QBT protocol (v1 and v2)
+- **High-Level File Manager**: Simplified interface for receiving complete, reconstructed files, abstracting away low-level data segments.
 - **Automatic Reconnection**: Intelligent failover across multiple servers
 - **Server List Management**: Dynamic server list updates with persistence
 - **Async/Await Support**: Built on asyncio for high performance
@@ -36,30 +37,37 @@ pip install -e ".[dev,test]"
 
 ```python
 import asyncio
-from byte_blaster import ByteBlasterClient
+from byte_blaster import ByteBlasterFileManager, CompletedFile
 
-async def handle_data(segment):
-    print(f"Received: {segment.filename} block {segment.block_number}/{segment.total_blocks}")
+async def handle_file(file: CompletedFile):
+    """Handler for completed files."""
+    print(f"Received file: {file.filename}, Size: {len(file.data)} bytes")
 
 async def main():
-    # Create client with your email
-    client = ByteBlasterClient("your-email@example.com")
+    # Use the high-level file manager, the recommended client for most use cases.
+    manager = ByteBlasterFileManager(email="your-email@example.com")
     
-    # Subscribe to data events
-    client.subscribe(handle_data)
+    # Subscribe to completed file events
+    manager.subscribe(handle_file)
     
     # Start receiving data
-    await client.start()
+    await manager.start()
     
     # Keep running (use Ctrl+C to stop)
     try:
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        await client.stop()
+        # Wait indefinitely until the program is interrupted
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        print("\nClient shutting down...")
+    finally:
+        await manager.stop()
+        print("Client stopped.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
 ```
 
 ## Complete Example
@@ -94,41 +102,72 @@ python example.py
 
 ## API Reference
 
+### ByteBlasterFileManager
+
+The recommended high-level client for most use cases. It abstracts away segment handling and provides a simple interface for receiving complete files.
+
+```python
+from byte_blaster import ByteBlasterFileManager, ByteBlasterClientOptions
+
+# Configure the client with your email
+options = ByteBlasterClientOptions(email="your-email@example.com")
+
+# Create the file manager
+manager = ByteBlasterFileManager(options)
+```
+
+#### Methods
+
+- `subscribe(handler)`: Subscribe to `CompletedFile` events.
+- `unsubscribe(handler)`: Remove event subscription.
+- `start()`: Start the client (async).
+- `stop(timeout=5.0)`: Stop the client (async).
+
+#### Properties
+- `client`: Access the underlying `ByteBlasterClient` instance.
+- `assembler`: Access the `FileAssembler` instance.
+
+
 ### ByteBlasterClient
 
-Main client class for connecting to ByteBlaster servers.
+The low-level client for handling the EMWIN QBT protocol. Use this if you need to work directly with data segments instead of complete files.
 
 ```python
 client = ByteBlasterClient(
-    email="user@example.com",
-    server_list_path="servers.json",    # Server persistence file
-    watchdog_timeout=20.0,              # Connection timeout
-    max_exceptions=10,                  # Max errors before reconnect
-    reconnect_delay=5.0,               # Delay between reconnects
+    options=ByteBlasterClientOptions(
+        email="user@example.com",
+        server_list_path="servers.json",    # Server persistence file
+        watchdog_timeout=20.0,              # Connection timeout
+        max_exceptions=10,                  # Max errors before reconnect
+        reconnect_delay=5.0,               # Delay between reconnects
+    )
 )
 ```
 
 #### Methods
 
-- `subscribe(handler)`: Subscribe to data segment events
-- `unsubscribe(handler)`: Remove event subscription
-- `start()`: Start the client (async)
-- `stop(timeout=5.0)`: Stop the client (async)
+- `subscribe(handler)`: Subscribe to data segment events.
+- `unsubscribe(handler)`: Remove event subscription.
+- `start()`: Start the client (async).
+- `stop(timeout=5.0)`: Stop the client (async).
+- `get_server_list()`: Get the current list of servers.
 
 #### Properties
 
-- `is_connected`: Connection status
-- `is_running`: Client running status
-- `server_count`: Number of available servers
-- `email`: Authentication email
+- `is_connected`: Connection status.
+- `is_running`: Client running status.
+- `server_count`: Number of available servers.
+- `email`: Authentication email.
 
-### QuickBlockTransferSegment
+### QBTSegment
 
-Data structure representing a single data block.
+Data structure representing a single QBT data block.
+
+*Note: This data class was previously named `QuickBlockTransferSegment` and has been renamed to `QBTSegment` for conciseness and alignment with the official protocol name.*
 
 ```python
 @dataclass
-class QuickBlockTransferSegment:
+class QBTSegment:
     filename: str           # Original filename
     block_number: int       # Block sequence number
     total_blocks: int       # Total blocks in file
@@ -144,14 +183,14 @@ class QuickBlockTransferSegment:
 
 ### Server Management
 
-The client automatically manages server lists:
+The client automatically manages server lists. You can access the list through the client instance:
 
 ```python
-# Get current server list
-server_list = client.get_server_list()
+# Get current server list from the file manager
+server_list = manager.client.get_server_list()
 
-# Server lists are automatically updated from the protocol
-# and persisted to disk for resilience
+# Or directly from a client instance
+# server_list = client.get_server_list()
 ```
 
 ## Configuration
@@ -189,7 +228,7 @@ logging.basicConfig(
 
 Based on the EMWIN ByteBlaster protocol:
 
-- **Frame Sync**: 6 consecutive 0xFF bytes
+- **Frame Sync**: 6 consecutive 0xFF bytes (for TCP stream)
 - **XOR Encoding**: All data XOR'ed with 0xFF
 - **Header Format**: 80-byte ASCII header with metadata
 - **Compression**: V2 uses zlib compression

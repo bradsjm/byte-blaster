@@ -11,18 +11,20 @@ import signal
 import sys
 from pathlib import Path
 
-from byte_blaster.client import ByteBlasterClientOptions
-
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from byte_blaster import ByteBlasterClient, QuickBlockTransferSegment
+from byte_blaster import (
+    ByteBlasterClientOptions,
+    ByteBlasterFileManager,
+    CompletedFile,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class WeatherDataHandler:
-    """Example handler for processing weather data segments."""
+class FileSaver:
+    """Example handler for saving completed files."""
 
     def __init__(self, output_dir: str = "weather_data") -> None:
         """Initialize handler with output directory.
@@ -33,65 +35,29 @@ class WeatherDataHandler:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        self.file_segments: dict[str, list[QuickBlockTransferSegment]] = {}
+        self.completed_files_count = 0
+        self.total_bytes_received = 0
 
-    async def handle_segment(self, segment: QuickBlockTransferSegment) -> None:
-        """Handle received data segment.
-
-        Args:
-            segment: Received QuickBlockTransferSegment
-
-        """
-        # Skip FILLFILE.TXT - it's filler data when no real data is being transmitted
-        if segment.filename == "FILLFILE.TXT":
-            return
-
-        print(f"Received: {segment.filename} block {segment.block_number}/{segment.total_blocks}")
-
-        # Group segments by file key
-        file_key = segment.key
-        if file_key not in self.file_segments:
-            self.file_segments[file_key] = []
-
-        self.file_segments[file_key].append(segment)
-
-        # Check if we have all segments for this file
-        segments = self.file_segments[file_key]
-        if len(segments) == segment.total_blocks:
-            await self._reconstruct_file(file_key, segments)
-
-    async def _reconstruct_file(
-        self, file_key: str, segments: list[QuickBlockTransferSegment]
-    ) -> None:
-        """Reconstruct complete file from segments.
-
-        Args:
-            file_key: Unique file identifier
-            segments: List of all segments for the file
-
-        """
-        # Sort segments by block number
-        segments.sort(key=lambda s: s.block_number)
-
-        # Combine content
-        complete_data = b"".join(segment.content for segment in segments)
-
-        # Get filename from first segment
-        filename = segments[0].filename
-        output_path = self.output_dir / filename
+    async def save_file(self, file: CompletedFile) -> None:
+        """Handle a completed file."""
+        output_path = self.output_dir / file.filename
 
         # Ensure parent directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write file
         try:
-            output_path.write_bytes(complete_data)
-            print(f"✓ Saved complete file: {output_path} ({len(complete_data)} bytes)")
+            output_path.write_bytes(file.data)
+            self.completed_files_count += 1
+            self.total_bytes_received += len(file.data)
+            print(f"✓ Saved complete file: {output_path} ({len(file.data)} bytes)")
+            if self.completed_files_count % 10 == 0:
+                print(
+                    f"Total files saved: {self.completed_files_count}, "
+                    f"Total bytes: {self.total_bytes_received / 1024:.2f} KB"
+                )
         except OSError as e:
             print(f"✗ Failed to save {output_path}: {e}")
-
-        # Clean up segments from memory
-        del self.file_segments[file_key]
 
 
 async def main() -> None:
@@ -110,39 +76,21 @@ async def main() -> None:
     print(f"Email: {email}")
     print("Press Ctrl+C to stop\n")
 
-    # Create data handler
-    handler = WeatherDataHandler("weather_data")
+    # Create file saver
+    file_saver = FileSaver("weather_data")
 
-    # Create client
-    client = ByteBlasterClient(
-        ByteBlasterClientOptions(
-            email=email,
-            server_list_path="servers.json",
-            watchdog_timeout=30.0,  # 30 second timeout
-            reconnect_delay=5.0,  # 5 second reconnect delay
-            connection_timeout=10.0,  # 10 second connection timeout
-        )
+    # Create client options
+    options = ByteBlasterClientOptions(
+        email=email,
+        server_list_path="servers.json",
+        watchdog_timeout=30.0,  # 30 second timeout
+        reconnect_delay=5.0,  # 5 second reconnect delay
+        connection_timeout=10.0,  # 10 second connection timeout
     )
 
-    # Subscribe to data events
-    client.subscribe(handler.handle_segment)
-
-    # Add segment counter (excluding FILLFILE.TXT)
-    segment_count = 0
-    fill_file_count = 0
-
-    def count_segments(segment: QuickBlockTransferSegment) -> None:
-        nonlocal segment_count, fill_file_count
-        if segment.filename == "FILLFILE.TXT":
-            fill_file_count += 1
-        else:
-            segment_count += 1
-            if segment_count % 10 == 0:
-                print(
-                    f"Data segments received: {segment_count} (skipped {fill_file_count} fill segments)"
-                )
-
-    client.subscribe(count_segments)
+    # Create file manager
+    file_manager = ByteBlasterFileManager(options=options)
+    file_manager.subscribe(file_saver.save_file)
 
     # Setup signal handler for graceful shutdown
     shutdown_event = asyncio.Event()
@@ -156,10 +104,10 @@ async def main() -> None:
         signal.signal(sig, lambda _s, _f: signal_handler())
 
     try:
-        # Start client
-        await client.start()
+        # Start the file manager
+        await file_manager.start()
 
-        print(f"Client started with {client.server_count} servers")
+        print(f"Client started with {file_manager.client.server_count} servers")
         print("Waiting for connection and data...")
 
         # Wait for shutdown signal
@@ -173,11 +121,10 @@ async def main() -> None:
     finally:
         # Stop client
         print("Stopping client...")
-        await client.stop(timeout=10.0)
+        await file_manager.stop(timeout=10.0)
         print("Client stopped")
-        print(f"Data segments received: {segment_count}")
-        print(f"Fill segments skipped: {fill_file_count}")
-        print(f"Total segments processed: {segment_count + fill_file_count}")
+        print(f"Completed files saved: {file_saver.completed_files_count}")
+        print(f"Total bytes received: {file_saver.total_bytes_received}")
 
 
 def run_example() -> None:

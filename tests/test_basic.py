@@ -2,50 +2,85 @@
 
 import pytest
 
-from byte_blaster import ByteBlasterClient, QuickBlockTransferSegment, ByteBlasterServerList
+from byte_blaster import (
+    ByteBlasterClient,
+    QBTSegment,
+    ByteBlasterServerList,
+    ServerListManager,
+)
 from byte_blaster.client import ByteBlasterClientOptions
 from byte_blaster.utils.crypto import xor_encode, xor_decode, verify_checksum
-from byte_blaster.server.manager import ServerListManager
+
+
+@pytest.fixture
+def client_options():
+    """Fixture for ByteBlasterClientOptions."""
+    return ByteBlasterClientOptions("test@example.com")
+
+
+@pytest.fixture
+def server_list():
+    """Fixture for ByteBlasterServerList."""
+    return ByteBlasterServerList()
+
+
+@pytest.fixture
+def server_manager():
+    """Fixture for ServerListManager."""
+    return ServerListManager(enable_persistence=False)
 
 
 def test_package_imports():
     """Test that all main components can be imported."""
     # Test that classes exist and can be instantiated
     assert ByteBlasterClient is not None
-    assert QuickBlockTransferSegment is not None
+    assert QBTSegment is not None
     assert ByteBlasterServerList is not None
     assert ServerListManager is not None
+    assert ByteBlasterClientOptions is not None
 
 
-def test_xor_encoding():
+@pytest.mark.parametrize(
+    "test_data",
+    [
+        b"Hello, World!",
+        b"",
+        b"\x00\x01\x02\x03",
+    ],
+)
+def test_xor_encoding(test_data: bytes):
     """Test XOR encoding and decoding functions."""
-    test_data = b"Hello, World!"
-
     # Test encoding and decoding
     encoded = xor_encode(test_data)
     decoded = xor_decode(encoded)
 
     assert decoded == test_data
-    assert encoded != test_data
+    if test_data:
+        assert encoded != test_data
 
 
-def test_checksum_verification():
+@pytest.mark.parametrize(
+    "test_data, is_valid",
+    [
+        (b"Test data for checksum", True),
+        (b"Another test", True),
+        (b"", True),
+    ],
+)
+def test_checksum_verification(test_data: bytes, is_valid: bool):
     """Test checksum calculation and verification."""
-    test_data = b"Test data for checksum"
-
     # Calculate checksum manually
     expected_checksum = sum(test_data) & 0xFFFF
 
     # Test verification
-    assert verify_checksum(test_data, expected_checksum)
-    assert not verify_checksum(test_data, expected_checksum + 1)
-    assert not verify_checksum(test_data, -1)
+    assert verify_checksum(test_data, expected_checksum) == is_valid
+    if is_valid:
+        assert not verify_checksum(test_data, expected_checksum + 1)
+        assert not verify_checksum(test_data, -1)
 
 
-def test_server_list_creation():
+def test_server_list_creation(server_list: ByteBlasterServerList):
     """Test server list creation and basic functionality."""
-    server_list = ByteBlasterServerList()
-
     # Should have default servers
     assert len(server_list) > 0
     assert bool(server_list)
@@ -56,8 +91,8 @@ def test_server_list_creation():
 
 
 def test_segment_creation():
-    """Test QuickBlockTransferSegment creation."""
-    segment = QuickBlockTransferSegment(
+    """Test QBTSegment creation."""
+    segment = QBTSegment(
         filename="test.txt",
         block_number=1,
         total_blocks=5,
@@ -74,9 +109,9 @@ def test_segment_creation():
 
 
 @pytest.mark.asyncio
-async def test_client_creation():
+async def test_client_creation(client_options: ByteBlasterClientOptions):
     """Test ByteBlaster client creation."""
-    client = ByteBlasterClient(ByteBlasterClientOptions("test@example.com"))
+    client = ByteBlasterClient(client_options)
 
     assert client.email == "test@example.com"
     assert not client.is_connected
@@ -84,15 +119,13 @@ async def test_client_creation():
     assert client.server_count > 0
 
 
-def test_server_manager():
+def test_server_manager(server_manager: ServerListManager):
     """Test server list manager basic functionality."""
-    manager = ServerListManager(enable_persistence=False)
-
-    assert len(manager) > 0
-    assert bool(manager)
+    assert len(server_manager) > 0
+    assert bool(server_manager)
 
     # Test getting next server
-    server = manager.get_next_server()
+    server = server_manager.get_next_server()
     assert server is not None
     assert len(server) == 2  # (host, port)
     assert isinstance(server[0], str)

@@ -1,7 +1,7 @@
 [project]
 name = "byte-blaster"
 version = "1.0.0"
-description = "Python implementation of the EMWIN ByteBlaster protocol for receiving weather data"
+description = "Python implementation of the EMWIN QBT broadcast protocol for receiving weather data"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
