@@ -5,10 +5,9 @@ description = "Python implementation of the EMWIN QBT broadcast protocol for rec
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pytest>=8.4.0",
 ]
 license = { file = "LICENSE" }
-authors = [{ name = "ByteBlaster Python Team", email = "support@example.com" }]
+authors = [{ name = "Jonathan Bradshaw", email = "jb@nrgup.net" }]
 keywords = ["emwin", "byteblaster", "weather", "noaa", "quickblocktransfer"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -20,9 +19,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
 
-[dependency-groups]
-dev = ["basedpyright>=1.29.2", "ruff>=0.11.12"]
-test = ["pytest-asyncio>=0.23.0", "pytest-mock>=3.14.0", "pytest>=8.0.0"]
+[project.optional-dependencies]
+dev = ["ruff>=0.11.12"]
+test = [
+    "pytest>=8.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "--strict-config"]

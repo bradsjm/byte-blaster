@@ -18,11 +18,8 @@ wheels = [
 name = "byte-blaster"
 version = "1.0.0"
 source = { virtual = "." }
-dependencies = [
-    { name = "pytest" },
-]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
     { name = "basedpyright" },
     { name = "ruff" },
@@ -34,18 +31,14 @@ test = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pytest", specifier = ">=8.4.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "basedpyright", specifier = ">=1.29.2" },
-    { name = "ruff", specifier = ">=0.11.12" },
+requires-dist = [
+    { name = "basedpyright", marker = "extra == 'dev'", specifier = ">=1.29.2" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=8.4.0" },
+    { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.23.0" },
+    { name = "pytest-mock", marker = "extra == 'test'", specifier = ">=3.14.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.11.12" },
 ]
-test = [
-    { name = "pytest", specifier = ">=8.0.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23.0" },
-    { name = "pytest-mock", specifier = ">=3.14.0" },
-]
+provides-extras = ["dev", "test"]
 
 [[package]]
 name = "colorama"

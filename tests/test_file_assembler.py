@@ -6,6 +6,7 @@ out of order, which allows higher priority files to interrupt lower priority tra
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+import logging
 
 import pytest
 from _pytest.logging import LogCaptureFixture
@@ -163,6 +164,9 @@ async def test_fillfile_is_ignored() -> None:
 @pytest.mark.asyncio
 async def test_duplicate_segments_are_handled(caplog: LogCaptureFixture) -> None:
     """Test that duplicate segments for a completed file are ignored."""
+    # Set the log capture level to INFO to catch the duplicate file warning
+    caplog.set_level(logging.INFO)
+    
     on_file_completed = AsyncMock()
     assembler = FileAssembler(on_file_completed=on_file_completed)
     timestamp = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
@@ -177,5 +181,5 @@ async def test_duplicate_segments_are_handled(caplog: LogCaptureFixture) -> None
     await assembler.handle_segment(segment1)
     on_file_completed.assert_called_once()  # No new file completion
 
-    # A log message should indicate a duplicate was skipped
-    assert "Skipping segment for duplicate file" in caplog.text
+    # The log should indicate a duplicate was skipped
+    assert any("Skipping segment for duplicate file" in line for line in caplog.text.splitlines())
