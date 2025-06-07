@@ -9,13 +9,13 @@ import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
-from enum import IntEnum
+from enum import Enum
 
 from byte_blaster.protocol.models import (
     ByteBlasterServerList,
     DataBlockFrame,
     ProtocolFrame,
-    QuickBlockTransferSegment,
+    QBTSegment,
     ServerListFrame,
 )
 from byte_blaster.utils.crypto import XorBuffer, decompress_zlib, verify_checksum
@@ -23,16 +23,16 @@ from byte_blaster.utils.crypto import XorBuffer, decompress_zlib, verify_checksu
 logger = logging.getLogger(__name__)
 
 
-class DecoderState(IntEnum):
+class DecoderState(Enum):
     """Protocol decoder states."""
 
-    RESYNC = 0
-    START_FRAME = 1
-    FRAME_TYPE = 2
-    SERVER_LIST = 3
-    BLOCK_HEADER = 4
-    BLOCK_BODY = 5
-    VALIDATE = 6
+    RESYNC = "RESYNC"
+    START_FRAME = "START_FRAME"
+    FRAME_TYPE = "FRAME_TYPE"
+    SERVER_LIST = "SERVER_LIST"
+    BLOCK_HEADER = "BLOCK_HEADER"
+    BLOCK_BODY = "BLOCK_BODY"
+    VALIDATE = "VALIDATE"
 
 
 type FrameHandler = Callable[[ProtocolFrame], None]
@@ -70,9 +70,14 @@ class ProtocolDecoder:
         """
         self._state = DecoderState.RESYNC
         self._buffer = XorBuffer()
-        self._current_segment: QuickBlockTransferSegment | None = None
+        self._current_segment: QBTSegment | None = None
         self._frame_handler = frame_handler
         self._remote_address = ""
+
+    @property
+    def state(self) -> DecoderState:
+        """Get current decoder state."""
+        return self._state
 
     def set_remote_address(self, address: str) -> None:
         """Set remote address for logging and segment metadata.
@@ -356,7 +361,7 @@ class ProtocolDecoder:
 
     def _parse_header_groups(
         self, match: re.Match[bytes], header_str: str
-    ) -> QuickBlockTransferSegment:
+    ) -> QBTSegment:
         """Parse regex match groups into segment object.
 
         Args:
@@ -364,7 +369,7 @@ class ProtocolDecoder:
             header_str: Original header string
 
         Returns:
-            QuickBlockTransferSegment with parsed header data
+            QBTSegment with parsed header data
 
         """
         groups = match.groupdict()
@@ -396,7 +401,7 @@ class ProtocolDecoder:
                 msg = f"Invalid V2 length: {length} (must be 1-{self.MAX_V2_BODY_SIZE})"
                 raise ValueError(msg)
 
-        return QuickBlockTransferSegment(
+        return QBTSegment(
             filename=filename,
             block_number=block_number,
             total_blocks=total_blocks,
@@ -469,6 +474,13 @@ class ProtocolDecoder:
         # Handle compression and checksum validation based on protocol version
         checksum_valid = self._validate_segment_checksum(segment)
 
+        # After validation, trim padding from text files.
+        # The last block of a transmission may not be fully populated with content,
+        # and for text files, this padding should be removed. The protocol specifies
+        # null padding, but some sources may use whitespace.
+        if segment.filename.upper().endswith((".TXT", ".WMO")):
+            segment.content = segment.content.rstrip(b"\x00 \t\r\n")
+
         # Emit segment regardless of checksum status for data collection
         frame = DataBlockFrame(
             content=segment.content,
@@ -483,7 +495,7 @@ class ProtocolDecoder:
         )
         return True
 
-    def _validate_segment_checksum(self, segment: QuickBlockTransferSegment) -> bool:
+    def _validate_segment_checksum(self, segment: QBTSegment) -> bool:
         """Validate segment checksum based on protocol version.
 
         Args:
@@ -499,7 +511,7 @@ class ProtocolDecoder:
             return self._validate_v2_checksum(segment)
         return False
 
-    def _validate_v1_checksum(self, segment: QuickBlockTransferSegment) -> bool:
+    def _validate_v1_checksum(self, segment: QBTSegment) -> bool:
         """Validate V1 protocol checksum.
 
         Args:
@@ -509,18 +521,22 @@ class ProtocolDecoder:
             True if checksum is valid
 
         """
-        checksum_valid = verify_checksum(segment.content, segment.checksum)
+        # V1 checksum from the header can be a 32-bit value; it must be masked to
+        # 16 bits for correct validation against the calculated 16-bit checksum.
+        expected_checksum = segment.checksum & 0xFFFF
+        checksum_valid = verify_checksum(segment.content, expected_checksum)
         if not checksum_valid:
             logger.warning(
-                "V1 checksum validation failed for %s: expected %d, calculated %d (length: %d)",
+                "V1 checksum validation failed for %s: expected %d (from header %d), calculated %d (length: %d)",
                 segment.filename,
+                expected_checksum,
                 segment.checksum,
                 sum(segment.content) & 0xFFFF,
                 len(segment.content),
             )
         return checksum_valid
 
-    def _validate_v2_checksum(self, segment: QuickBlockTransferSegment) -> bool:
+    def _validate_v2_checksum(self, segment: QBTSegment) -> bool:
         """Validate V2 protocol checksum with compression support.
 
         Args:
@@ -547,7 +563,7 @@ class ProtocolDecoder:
         """
         return len(content) >= 2 and content[:2] in (b"\x78\x9c", b"\x78\xda", b"\x78\x01")
 
-    def _validate_compressed_data(self, segment: QuickBlockTransferSegment) -> bool:
+    def _validate_compressed_data(self, segment: QBTSegment) -> bool:
         """Validate compressed V2 data.
 
         Args:
@@ -587,7 +603,7 @@ class ProtocolDecoder:
 
         return False
 
-    def _validate_uncompressed_v2_data(self, segment: QuickBlockTransferSegment) -> bool:
+    def _validate_uncompressed_v2_data(self, segment: QBTSegment) -> bool:
         """Validate uncompressed V2 data.
 
         Args:

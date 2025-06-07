@@ -5,13 +5,13 @@ EMWIN (Emergency Managers Weather Information Network) client, including
 protocol decoding, authentication, and data models.
 """
 
-from byte_blaster.protocol.auth import AuthenticationHandler
-from byte_blaster.protocol.decoder import ProtocolDecoder
-from byte_blaster.protocol.models import (
+from .auth import AuthenticationHandler
+from .decoder import ProtocolDecoder
+from .models import (
     ByteBlasterServerList,
     DataBlockFrame,
     ProtocolFrame,
-    QuickBlockTransferSegment,
+    QBTSegment,
     ServerListFrame,
 )
 
@@ -21,6 +21,6 @@ __all__ = [
     "DataBlockFrame",
     "ProtocolDecoder",
     "ProtocolFrame",
-    "QuickBlockTransferSegment",
+    "QBTSegment",
     "ServerListFrame",
 ]

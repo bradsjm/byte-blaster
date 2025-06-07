@@ -13,19 +13,19 @@ from dataclasses import dataclass
 from typing import Any
 
 from byte_blaster.protocol.auth import AuthenticationHandler, AuthProtocol
-from byte_blaster.protocol.decoder import ProtocolDecoder
+from byte_blaster.protocol.decoder import ProtocolDecoder, DecoderState
 from byte_blaster.protocol.models import (
     DataBlockFrame,
     ProtocolFrame,
-    QuickBlockTransferSegment,
+    QBTSegment,
     ServerListFrame,
 )
-from byte_blaster.server.manager import ServerListManager
+from byte_blaster.utils import ServerListManager
 
 logger = logging.getLogger(__name__)
 
-type SegmentHandler = Callable[[QuickBlockTransferSegment], None]
-type AsyncSegmentHandler = Callable[[QuickBlockTransferSegment], Any]
+type SegmentHandler = Callable[[QBTSegment], None]
+type AsyncSegmentHandler = Callable[[QBTSegment], Any]
 
 
 class ConnectionProtocol(asyncio.Protocol, AuthProtocol):
@@ -274,7 +274,7 @@ class ByteBlasterClient:
         # Start connection loop
         self._reconnect_task = asyncio.create_task(self._connection_loop())
 
-    async def stop(self, *, timeout: float = 5.0) -> None:  # noqa: ASYNC109
+    async def stop(self, timeout: float | None = None) -> None:
         """Stop the ByteBlaster client.
 
         Args:
@@ -469,6 +469,11 @@ class ByteBlasterClient:
         """Get protocol decoder instance."""
         return self._decoder
 
+    @property
+    def decoder_state(self) -> DecoderState:
+        """Get current state of the protocol decoder."""
+        return self._decoder.state
+
     def on_frame_received(self, frame: ProtocolFrame) -> None:
         """Handle received protocol frames.
 
@@ -484,7 +489,7 @@ class ByteBlasterClient:
         elif isinstance(frame, ServerListFrame) and frame.server_list:
             self._handle_server_list_update(frame.server_list)
 
-    async def _handle_data_segment(self, segment: QuickBlockTransferSegment) -> None:
+    async def _handle_data_segment(self, segment: QBTSegment) -> None:
         """Handle received data segments.
 
         Args:

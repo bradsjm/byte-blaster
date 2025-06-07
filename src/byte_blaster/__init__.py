@@ -7,26 +7,59 @@ Transfer protocol.
 Example usage:
     ```python
     import asyncio
-    from byte_blaster import ByteBlasterClient
+    from pathlib import Path
 
-    async def handle_data(segment):
-        print(f"Received: {segment.filename} block {segment.block_number}")
+    from byte_blaster import (
+        ByteBlasterClientOptions,
+        ByteBlasterFileManager,
+        CompletedFile,
+    )
 
-    async def main():
-        client = ByteBlasterClient("user@example.com")
-        client.subscribe(handle_data)
-        await client.start()
+    async def save_file(file: CompletedFile) -> None:
+        output_dir = Path("weather_data")
+        output_dir.mkdir(exist_ok=True)
+        path = output_dir / file.filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(file.data)
+        print(f"✓ Saved: {path} ({len(file.data)} bytes)")
 
-    asyncio.run(main())
+    async def main() -> None:
+        options = ByteBlasterClientOptions(email="user@example.com")
+        file_manager = ByteBlasterFileManager(options)
+        file_manager.subscribe(save_file)
+
+        await file_manager.start()
+        print("Client started, waiting for files...")
+
+        # Keep running until Ctrl+C is pressed
+        try:
+            await asyncio.Event().wait()
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            print("\nStopping client...")
+            await file_manager.stop()
+            print("Client stopped.")
+
+    if __name__ == "__main__":
+        try:
+            asyncio.run(main())
+        except KeyboardInterrupt:
+            print("\nExiting.")
     ```
 """
 
-from byte_blaster.client import ByteBlasterClient
+from byte_blaster.client import ByteBlasterClient, ByteBlasterClientOptions
+from byte_blaster.file_manager import (
+    ByteBlasterFileManager,
+    CompletedFile,
+    FileAssembler,
+)
 from byte_blaster.protocol.models import (
     ByteBlasterServerList,
-    QuickBlockTransferSegment,
+    QBTSegment,
 )
-from byte_blaster.server.manager import ServerListManager
+from byte_blaster.utils import ServerListManager
 
 __version__ = "1.0.0"
 __author__ = "ByteBlaster Python Team"
@@ -34,7 +67,11 @@ __email__ = "support@example.com"
 
 __all__ = [
     "ByteBlasterClient",
+    "ByteBlasterClientOptions",
+    "ByteBlasterFileManager",
     "ByteBlasterServerList",
-    "QuickBlockTransferSegment",
+    "CompletedFile",
+    "FileAssembler",
+    "QBTSegment",
     "ServerListManager",
 ]

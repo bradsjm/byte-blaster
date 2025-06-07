@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class QuickBlockTransferSegment:
-    """A QuickBlockTransferSegment represents a single data block in the protocol.
+class QBTSegment:
+    """A QBTSegment represents a single data block in the QBT protocol.
 
     The Quick Block Transfer protocol divides messages into small pieces to allow
     interruption of large, low priority messages by messages of a more immediate
@@ -50,7 +50,7 @@ class QuickBlockTransferSegment:
     def __str__(self) -> str:
         """Return string representation of this segment."""
         return (
-            f"[QuickBlockTransferSegment] "
+            f"[QBTSegment] "
             f"Filename={self.filename} "
             f"Date={self.timestamp} "
             f"Block#{self.block_number}/{self.total_blocks} "
@@ -216,7 +216,7 @@ class DataBlockFrame(ProtocolFrame):
     """Frame containing a data block."""
 
     frame_type: str = field(default="data_block", init=False)
-    segment: QuickBlockTransferSegment | None = None
+    segment: QBTSegment | None = None
 
 
 @dataclass
