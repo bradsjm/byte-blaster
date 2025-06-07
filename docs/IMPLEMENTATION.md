@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document provides a comprehensive summary of the Python ByteBlaster implementation, including architecture decisions, protocol compliance, and usage guidelines.
+This document provides a comprehensive summary of the Python ByteBlaster implementation of the **EMWIN Quick Block Transfer (QBT) Satellite Broadcast Protocol**. It covers architecture decisions, protocol compliance, and usage guidelines.
 
 ## Implementation Status
 
@@ -10,6 +10,7 @@ This document provides a comprehensive summary of the Python ByteBlaster impleme
 
 ### Core Features Implemented
 
+- **High-Level File Manager**: Simplified interface for receiving complete files
 - **Complete Protocol Support**: Full ByteBlaster protocol v1 and v2 implementation
 - **State Machine Decoder**: 7-state protocol decoder with robust error handling
 - **Authentication**: XOR-obfuscated logon with periodic re-authentication
@@ -28,50 +29,61 @@ This document provides a comprehensive summary of the Python ByteBlaster impleme
 ```
 src/byte_blaster/
 ├── __init__.py              # Main package exports
-├── client.py                # ByteBlasterClient (main interface)
+├── client.py                # ByteBlasterClient (core protocol logic)
+├── file_manager.py          # ByteBlasterFileManager (high-level interface)
+├── handler.py               # Example data handler implementation
 ├── protocol/
 │   ├── __init__.py
 │   ├── auth.py              # Authentication handler
 │   ├── decoder.py           # Protocol state machine
 │   └── models.py            # Data models (segments, server lists)
-├── server/
-│   ├── __init__.py
-│   └── manager.py           # Server list management
 └── utils/
     ├── __init__.py
-    └── crypto.py            # XOR encoding, compression, checksums
+    ├── crypto.py            # XOR encoding, compression, checksums
+    └── manager.py           # Server list management
 ```
 
 ### Core Components
 
-#### 1. ByteBlasterClient
-- **Purpose**: Main client interface for connecting to servers
-- **Features**: Automatic reconnection, server failover, event handling
-- **API**: Simple subscription-based interface for data events
+#### 1. ByteBlasterFileManager
+- **Purpose**: High-level client interface for receiving complete files. This is the recommended entry point for most users.
+- **Features**: Abstracts away segment handling, provides a simple subscription model for complete files.
+- **API**: `subscribe(handler)` for receiving `CompletedFile` objects.
 
-#### 2. ProtocolDecoder
-- **Purpose**: Parse incoming byte streams into structured data
-- **Implementation**: 7-state finite state machine
-- **States**: RESYNC → START_FRAME → FRAME_TYPE → (SERVER_LIST|BLOCK_HEADER) → BLOCK_BODY → VALIDATE
-- **Error Handling**: Automatic state reset on errors with resynchronization
+#### 2. ByteBlasterClient
+- **Purpose**: Core client for connecting to servers and handling the ByteBlaster protocol.
+- **Features**: Automatic reconnection, server failover, event handling for data segments.
+- **API**: Lower-level interface, subscribes to `QuickBlockTransferSegment` events.
 
-#### 3. ServerListManager
-- **Purpose**: Manage server lists with persistence and failover
-- **Features**: JSON persistence, round-robin selection, dynamic updates
-- **Resilience**: Automatic fallback to defaults on corruption
+#### 3. ProtocolDecoder
+- **Purpose**: Parse incoming byte streams into structured data.
+- **Implementation**: 7-state finite state machine.
+- **States**: `RESYNC` → `START_FRAME` → `FRAME_TYPE` → (`SERVER_LIST`|`BLOCK_HEADER`) → `BLOCK_BODY` → `VALIDATE`
+- **Error Handling**: Automatic state reset on errors with resynchronization.
 
-#### 4. AuthenticationHandler
-- **Purpose**: Handle login and periodic re-authentication
-- **Protocol**: XOR-encoded "ByteBlast Client|NM-{email}|V2"
-- **Timing**: Initial login + re-auth every 115 seconds
+#### 4. ServerListManager
+- **Purpose**: Manage server lists with persistence and failover.
+- **Location**: `byte_blaster.utils.manager`
+- **Features**: JSON persistence, round-robin selection, dynamic updates.
+- **Resilience**: Automatic fallback to defaults on corruption.
+
+#### 5. FileAssembler
+- **Purpose**: Internal component to assemble data segments into complete files.
+- **Location**: `byte_blaster.file_manager`
+- **Function**: Collects all `QuickBlockTransferSegment` parts of a file and reconstructs the original data.
+
+#### 6. AuthenticationHandler
+- **Purpose**: Handle login and periodic re-authentication.
+- **Protocol**: XOR-encoded `"ByteBlast Client|NM-{email}|V2"`
+- **Timing**: Initial login + re-auth every 115 seconds.
 
 ## Protocol Compliance
 
 ### Protocol Specification Adherence
 
-✅ **Frame Synchronization**: 6 consecutive 0xFF bytes
-✅ **XOR Encoding**: All data XOR'ed with 0xFF
-✅ **Header Format**: 80-byte ASCII headers with regex parsing
+✅ **Frame Synchronization**: 6 consecutive `0xFF` bytes. This implementation targets the TCP stream, which uses `0xFF` for synchronization. The underlying EMWIN QBT satellite protocol draft specifies 6 `NULL` bytes (`0x00`) for its frame prefix, a difference handled by the upstream server.
+✅ **XOR Encoding**: All data XOR'ed with `0xFF`.
+✅ **Header Format**: 80-byte ASCII headers with regex parsing.
 ✅ **V1 Protocol**: 1024-byte fixed blocks
 ✅ **V2 Protocol**: Variable-size blocks with zlib compression
 ✅ **Checksum Validation**: Sum of bytes verification
@@ -79,52 +91,68 @@ src/byte_blaster/
 
 ### Header Format Support
 
+The implementation parses the 80-byte header terminated by `CRLF`. The key fields are extracted using regular expressions.
+
 ```
 /PF<filename> /PN <block_num> /PT <total_blocks> /CS <checksum> /FD<date> [/DL<length>]
 ```
 
-- **PF**: Filename (8.3 format)
-- **PN**: Block number (1-based)
-- **PT**: Total blocks for file
-- **CS**: Checksum (sum of data bytes)
-- **FD**: File date/time
-- **DL**: Data length (V2 only, enables compression)
+- **PF (Product Filename)**: An 8.3 format filename. The protocol draft specifies common extensions: `gif`, `jpg`, `png`, `txt`, `zis` (ZIP).
+- **PN (Packet Number)**: The block number, 1-based. Left-justified and space-padded.
+- **PT (Packets Total)**: The total number of blocks for the file. Left-justified and space-padded.
+- **CS (Computed Sum)**: A checksum calculated as the sum of all unsigned byte decimal values in the data block.
+- **FD (File Date/Time)**: The UTC timestamp of the file, with a specific format (`MM/DD/YYYY hh:mm:ss AM/PM`) where month, day, and hour are not zero-padded.
+- **DL (Data Length)**: V2 protocol only. Specifies the length of the compressed data in the block.
 
 ### Data Flow
 
-1. **Connection**: TCP connection to ByteBlaster server
-2. **Authentication**: Send XOR-encoded logon message
-3. **Frame Sync**: Wait for 6x 0xFF synchronization bytes
-4. **Frame Processing**: Parse headers and extract data blocks
-5. **Validation**: Verify checksums and emit valid segments
-6. **Reassembly**: User code reassembles complete files from segments
+The client processes a continuous, interleaved stream of data blocks that may belong to multiple files being transmitted concurrently. This ensures high-priority data (like weather alerts) can interrupt lower-priority transfers.
+
+1. **Connection**: TCP connection to a ByteBlaster server.
+2. **Authentication**: Send an XOR-encoded logon message.
+3. **Frame Sync**: Wait for `6 x 0xFF` synchronization bytes.
+4. **Frame Processing**: Parse headers to identify which file each data block belongs to. Blocks are received for multiple files simultaneously.
+5. **Segment Grouping**: The `FileAssembler` groups incoming segments by a unique key, which combines the filename and the transmission timestamp. This correctly handles multiple, concurrent file transfers, even for files with the same name.
+6. **Validation**: Verify checksums and emit valid data segments.
+7. **Reassembly**: Once all blocks for a unique file key are received, the `FileAssembler` sorts them by block number and reconstructs the complete file.
+8. **Notification**: The `ByteBlasterFileManager` notifies subscribers that a new file is complete.
 
 ## Key Implementation Decisions
 
-### 1. Asyncio Architecture
-- **Rationale**: Modern Python async/await for high performance
-- **Benefits**: Non-blocking I/O, concurrent operations, clean cancellation
-- **Trade-offs**: Requires Python 3.12+ and async-aware user code
+### 1. Interleaved Block Handling
+- **Rationale**: The Quick Block Transfer (QBT) protocol is designed for the concurrent transmission of multiple files, allowing high-priority data (e.g., severe weather warnings) to interrupt and take precedence over routine data.
+- **Benefits**: Ensures timely delivery of critical alerts, leading to a more responsive system.
+- **Implementation**: The `FileAssembler` uses a dictionary to store segments for each active file transfer, keyed by a unique identifier (`filename` + `timestamp`). This allows it to reconstruct multiple files in parallel, regardless of the order in which their blocks arrive.
 
-### 2. State Machine Decoder
-- **Rationale**: Robust handling of streaming protocol data
-- **Benefits**: Handles partial reads, connection errors, malformed data
-- **Implementation**: Explicit state transitions with comprehensive error recovery
+### 2. Asyncio Architecture
+- **Rationale**: Modern Python `async/await` for high performance.
+- **Benefits**: Non-blocking I/O, concurrent operations, clean cancellation.
+- **Trade-offs**: Requires Python 3.12+ and async-aware user code.
 
-### 3. Observable Pattern
-- **Rationale**: Flexible event-driven architecture
-- **Benefits**: Easy integration, testable, supports multiple subscribers
-- **API**: Simple `client.subscribe(handler)` interface
+### 3. High-Level File Manager
+- **Rationale**: Simplify client usage by abstracting away low-level segment reassembly.
+- **Benefits**: Users can work with complete files directly, reducing boilerplate code and complexity.
+- **Implementation**: The `ByteBlasterFileManager` wraps the `ByteBlasterClient` and uses a `FileAssembler` to handle segment logic internally.
 
-### 4. Server List Persistence
-- **Rationale**: Resilience across restarts and network failures
-- **Implementation**: Atomic JSON writes with fallback to defaults
-- **Benefits**: Improved connection success rates, load distribution
+### 4. State Machine Decoder
+- **Rationale**: Robust handling of streaming protocol data.
+- **Benefits**: Handles partial reads, connection errors, malformed data.
+- **Implementation**: Explicit state transitions with comprehensive error recovery.
 
-### 5. Type Safety
-- **Implementation**: Complete type hints with Python 3.12+ syntax
-- **Tools**: basedpyright for static analysis
-- **Benefits**: Fewer runtime errors, better IDE support, self-documenting
+### 5. Observable Pattern
+- **Rationale**: Flexible event-driven architecture.
+- **Benefits**: Easy integration, testable, supports multiple subscribers at both the file and segment level.
+- **API**: Simple `manager.subscribe(handler)` or `client.subscribe(handler)` interface.
+
+### 6. Server List Persistence
+- **Rationale**: Resilience across restarts and network failures.
+- **Implementation**: Atomic JSON writes with fallback to defaults.
+- **Benefits**: Improved connection success rates, load distribution.
+
+### 7. Type Safety
+- **Implementation**: Complete type hints with Python 3.12+ syntax.
+- **Tools**: `basedpyright` for static analysis.
+- **Benefits**: Fewer runtime errors, better IDE support, self-documenting.
 
 ## Performance Characteristics
 
@@ -166,62 +194,103 @@ ByteBlaster Simple Test Suite
 
 ## Usage Patterns
 
-### Basic Usage
+### Basic Usage (Recommended)
+
+The `ByteBlasterFileManager` provides the simplest way to get started. It handles file reassembly automatically.
+
 ```python
 import asyncio
-from byte_blaster import ByteBlasterClient
+import logging
+from pathlib import Path
 
-async def handle_data(segment):
-    print(f"Received: {segment.filename} block {segment.block_number}")
+from byte_blaster import ByteBlasterFileManager, ByteBlasterClientOptions, CompletedFile
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Create an output directory
+output_dir = Path("received_files")
+output_dir.mkdir(exist_ok=True)
+
+async def save_file(file: CompletedFile) -> None:
+    """A handler for completed files."""
+    output_path = output_dir / file.filename
+    try:
+        output_path.write_bytes(file.data)
+        logger.info(f"✓ Saved: {file.filename} ({len(file.data)} bytes)")
+    except IOError as e:
+        logger.error(f"✗ Failed to save {file.filename}: {e}")
 
 async def main():
-    client = ByteBlasterClient("jb@nrgup.net")
-    client.subscribe(handle_data)
-    await client.start()
+    """Main application routine."""
+    # Configure the client using the options data class
+    options = ByteBlasterClientOptions(email="your-email@example.com")
 
-asyncio.run(main())
-```
+    # Use the high-level file manager
+    manager = ByteBlasterFileManager(options)
 
-### File Reconstruction
-```python
-class FileAssembler:
-    def __init__(self):
-        self.segments = {}
+    # Subscribe to the file completion events
+    manager.subscribe(save_file)
 
-    async def handle_segment(self, segment):
-        key = segment.key
-        if key not in self.segments:
-            self.segments[key] = []
+    try:
+        logger.info("Starting ByteBlaster client...")
+        await manager.start()
+        # The client will run indefinitely, cancel with Ctrl+C
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        logger.info("Client shutting down...")
+    finally:
+        await manager.stop()
+        logger.info("Client stopped.")
 
-        self.segments[key].append(segment)
-
-        if len(self.segments[key]) == segment.total_blocks:
-            await self.save_complete_file(key, self.segments[key])
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
 ```
 
 ### Error Handling
 ```python
+# ... (inside main function)
 try:
-    await client.start()
-except ConnectionError:
-    logger.error("Failed to connect to any servers")
+    logger.info("Starting ByteBlaster client...")
+    await manager.start()
+    await asyncio.Event().wait()
+except ConnectionError as e:
+    logger.error(f"Failed to connect to any servers: {e}")
+except asyncio.CancelledError:
+    logger.info("Client shutting down...")
 except Exception as e:
-    logger.exception("Unexpected error: %s", e)
+    logger.exception(f"An unexpected error occurred: {e}")
 finally:
-    await client.stop()
+    if 'manager' in locals() and manager.client.is_running:
+        await manager.stop()
+    logger.info("Client stopped.")
 ```
 
 ## Configuration Options
 
 ### Client Configuration
+
+Configuration is managed via the `ByteBlasterClientOptions` data class, providing type-safe settings.
+
 ```python
-client = ByteBlasterClient(
+from byte_blaster import ByteBlasterClientOptions
+
+options = ByteBlasterClientOptions(
     email="user@example.com",
-    server_list_path="servers.json",    # Server persistence
-    watchdog_timeout=20.0,              # Connection timeout
-    max_exceptions=10,                  # Error threshold
-    reconnect_delay=5.0                 # Reconnection delay
+    server_list_path="config/servers.json",  # Server persistence path
+    watchdog_timeout=30.0,                   # Connection timeout
+    max_exceptions=5,                        # Error threshold
+    reconnect_delay=10.0,                    # Reconnection delay
+    connection_timeout=15.0                  # TCP connection attempt timeout
 )
+
+# Pass options to the client or manager
+# client = ByteBlasterClient(options)
+# manager = ByteBlasterFileManager(options)
 ```
 
 ### Logging Configuration
@@ -256,13 +325,13 @@ logging.basicConfig(
 
 ### Protocol Limitations
 - **Email Authentication**: Simple email-based auth (by design)
-- **No Encryption**: Protocol uses XOR obfuscation, not cryptographic security
-- **TCP Only**: No UDP or other transport options
+- **No Encryption**: Protocol uses XOR obfuscation, not cryptographic security. High-priority files may be transmitted twice by the server for redundancy, so downstream applications should be prepared to handle duplicates.
+- **TCP Only**: No UDP or other transport options.
 
 ### Implementation Limitations
 - **Python 3.12+**: Requires modern Python for type syntax
 - **Asyncio Only**: No synchronous API provided
-- **Memory Usage**: Keeps active segments in memory during assembly
+- **Memory Usage**: Keeps active segments in memory during assembly, though completed files are released immediately.
 
 ## Future Enhancements
 
@@ -282,10 +351,11 @@ logging.basicConfig(
 
 This ByteBlaster implementation provides a complete, production-ready solution for receiving EMWIN weather data. The architecture emphasizes:
 
+- **Simplicity**: High-level `ByteBlasterFileManager` for easy integration
 - **Reliability**: Robust error handling and automatic recovery
 - **Performance**: Efficient async I/O and memory management
 - **Maintainability**: Clean code with comprehensive type hints
-- **Flexibility**: Observable pattern for easy integration
+- **Flexibility**: Observable pattern for easy integration at file or segment level
 - **Compliance**: Full adherence to ByteBlaster protocol specification
 
 The implementation has been thoroughly tested and validated against the original C# reference implementation, ensuring compatibility with existing ByteBlaster infrastructure.
