@@ -24,7 +24,26 @@ logger = logging.getLogger(__name__)
 
 
 class DecoderState(Enum):
-    """Protocol decoder states."""
+    """Enumeration of protocol decoder states in the ByteBlaster state machine.
+
+    This enumeration defines all possible states that the ProtocolDecoder can be in
+    during the processing of incoming data streams. The decoder follows a strict
+    state machine pattern to parse the ByteBlaster protocol, transitioning between
+    these states based on the data content and parsing progress.
+
+    The state transitions follow this general flow:
+    RESYNC -> START_FRAME -> FRAME_TYPE -> (SERVER_LIST | BLOCK_HEADER) ->
+    BLOCK_BODY -> VALIDATE -> START_FRAME (repeating)
+
+    States:
+        RESYNC: Searching for frame synchronization bytes (6 consecutive 0xFF)
+        START_FRAME: Skipping null bytes to find the start of frame content
+        FRAME_TYPE: Analyzing header bytes to determine frame type
+        SERVER_LIST: Processing server list frame content
+        BLOCK_HEADER: Parsing data block header (80 bytes with protocol metadata)
+        BLOCK_BODY: Reading data block body content
+        VALIDATE: Performing checksum validation and emitting completed frames
+    """
 
     RESYNC = "RESYNC"
     START_FRAME = "START_FRAME"
@@ -39,10 +58,36 @@ type FrameHandler = Callable[[ProtocolFrame], None]
 
 
 class ProtocolDecoder:
-    """ByteBlaster protocol decoder with state machine.
+    """Production-grade ByteBlaster protocol decoder implementing a robust state machine.
 
-    This class implements the complete ByteBlaster protocol state machine
-    for parsing incoming byte streams into structured protocol frames.
+    This class provides a complete implementation of the ByteBlaster protocol decoder,
+    designed to parse continuous byte streams from network connections into structured
+    protocol frames. The decoder handles both V1 and V2 protocol variants with full
+    error recovery, checksum validation, and data decompression capabilities.
+
+    Key Features:
+    - State machine-based parsing for reliable stream processing
+    - Support for both V1 (fixed 1024-byte blocks) and V2 (variable-length, compressed) protocols
+    - Automatic frame synchronization and error recovery
+    - XOR-decoded buffer management with efficient memory usage
+    - Comprehensive checksum validation with protocol-specific algorithms
+    - Zlib decompression for V2 compressed data blocks
+    - Server list frame parsing and data block frame processing
+    - Configurable frame handlers for downstream processing integration
+
+    Protocol Structure:
+    The ByteBlaster protocol transmits data in frames, each beginning with 6 sync bytes
+    (0xFF when encoded), followed by frame content. Data block frames contain an 80-byte
+    ASCII header with metadata, followed by the actual data payload. Server list frames
+    contain ASCII text with available server information.
+
+    Error Handling:
+    The decoder implements robust error recovery, automatically resyncing on corrupt
+    data, validating checksums, and logging detailed diagnostic information. Invalid
+    frames are logged but do not crash the decoder, ensuring continuous operation.
+
+    Thread Safety:
+    This class is not thread-safe. Each connection should use its own decoder instance.
     """
 
     # Protocol constants
@@ -62,10 +107,23 @@ class ProtocolDecoder:
     HEADER_DATE_FORMAT = "%m/%d/%Y %I:%M:%S %p"
 
     def __init__(self, frame_handler: FrameHandler | None = None) -> None:
-        """Initialize protocol decoder.
+        """Initialize the ByteBlaster protocol decoder with default state and buffers.
+
+        Sets up the decoder in the initial RESYNC state with an empty XOR buffer and
+        prepares the internal state machine for processing incoming data. The decoder
+        begins in resynchronization mode, scanning for frame sync patterns to establish
+        proper frame boundaries.
+
+        The initialization creates:
+        - Internal XOR buffer for decoded data storage and manipulation
+        - State machine starting in RESYNC mode for frame synchronization
+        - Optional frame handler callback for processing completed frames
+        - Storage for current segment metadata during multi-state processing
 
         Args:
-            frame_handler: Optional callback for handling decoded frames
+            frame_handler: Optional callback function that receives completed ProtocolFrame
+                objects. This handler is called synchronously when frames are fully
+                decoded and validated. If None, frames are processed but not emitted.
 
         """
         self._state = DecoderState.RESYNC
@@ -76,39 +134,117 @@ class ProtocolDecoder:
 
     @property
     def state(self) -> DecoderState:
-        """Get current decoder state."""
+        """Get the current state of the protocol decoder state machine.
+
+        Returns the current processing state, which indicates what type of data
+        the decoder is expecting next and how it will process incoming bytes.
+        This property is useful for monitoring decoder progress and debugging
+        parsing issues.
+
+        Returns:
+            Current DecoderState enumeration value representing the active state
+            in the parsing state machine.
+
+        """
         return self._state
 
     def set_remote_address(self, address: str) -> None:
-        """Set remote address for logging and segment metadata.
+        """Set the remote server address for enhanced logging and segment tracking.
+
+        Configures the remote address that will be included in decoded segment metadata
+        and used for enhanced logging output. This address helps track the source of
+        data blocks when processing connections from multiple servers or when debugging
+        connection-specific issues.
+
+        The remote address is embedded in QBTSegment objects as the 'source' field,
+        enabling downstream processing to identify the origin of each data block.
+        This is particularly useful in multi-server environments or when aggregating
+        data from multiple ByteBlaster sources.
 
         Args:
-            address: Remote server address
+            address: The remote server address, typically in "host:port" format or
+                as an IP address. This string is stored as-is and included in all
+                subsequent segment metadata.
 
         """
         self._remote_address = address
 
     def set_frame_handler(self, handler: FrameHandler) -> None:
-        """Set frame handler callback.
+        """Set or update the frame handler callback for processing completed frames.
+
+        Configures the callback function that will receive all successfully decoded
+        and validated protocol frames. The handler is called synchronously during
+        frame processing, so implementations should be efficient and avoid blocking
+        operations to prevent decoder stalls.
+
+        The frame handler receives ProtocolFrame objects, which can be either
+        DataBlockFrame or ServerListFrame instances. Handlers should implement
+        appropriate type checking and processing logic for each frame type.
+
+        Error Handling:
+        If the frame handler raises an exception, it is logged but does not affect
+        decoder operation. The decoder continues processing subsequent frames to
+        maintain stream continuity.
 
         Args:
-            handler: Callback function for handling decoded frames
+            handler: Callable that accepts a ProtocolFrame object. The handler
+                is responsible for any downstream processing, storage, or forwarding
+                of the decoded frame data.
 
         """
         self._frame_handler = handler
 
     def feed(self, data: bytes) -> None:
-        """Feed raw data to decoder for processing.
+        """Feed raw network data to the decoder for incremental processing.
+
+        Accepts raw bytes from network connections and processes them through the
+        protocol state machine. This method is designed for streaming operation,
+        where data arrives in arbitrary-sized chunks from network I/O operations.
+        The decoder maintains internal buffering to handle partial frames and
+        incomplete data sequences.
+
+        Processing Flow:
+        1. Appends incoming data to the internal XOR buffer
+        2. Triggers state machine processing to parse buffered content
+        3. Automatically handles frame boundaries and state transitions
+        4. Emits completed frames via the configured frame handler
+
+        The method processes all available buffered data in the current call,
+        potentially completing multiple frames if sufficient data is available.
+        Partial frames remain buffered for completion when additional data arrives.
+
+        Error Recovery:
+        If processing encounters invalid data or corruption, the decoder automatically
+        transitions to resynchronization mode to recover frame boundaries without
+        losing subsequent valid data.
 
         Args:
-            data: Raw bytes from network connection
+            data: Raw bytes received from network connection. Can be any size from
+                single bytes to large buffers. The decoder handles arbitrary chunk
+                sizes efficiently through internal buffering.
 
         """
         self._buffer.append(data)
         self._process_buffer()
 
     def reset(self) -> None:
-        """Reset decoder state (typically after errors)."""
+        """Reset the decoder to initial state, clearing all buffers and progress.
+
+        Performs a complete reset of the decoder state machine, returning it to the
+        initial RESYNC state and clearing all internal buffers and temporary data.
+        This operation is typically used after encountering unrecoverable errors
+        or when starting processing of a new data stream.
+
+        Reset Operations:
+        - Sets state machine to RESYNC for frame synchronization
+        - Clears the internal XOR buffer, discarding any buffered data
+        - Resets current segment processing state
+        - Logs the reset operation for debugging purposes
+
+        This method provides a clean slate for processing new data streams and
+        ensures no state contamination between different connections or after
+        error conditions that require full recovery.
+        """
         self._state = DecoderState.RESYNC
         self._buffer.clear()
         self._current_segment = None
@@ -359,9 +495,7 @@ class ProtocolDecoder:
         self._current_segment = self._parse_header_groups(match, header_str)
         return True
 
-    def _parse_header_groups(
-        self, match: re.Match[bytes], header_str: str
-    ) -> QBTSegment:
+    def _parse_header_groups(self, match: re.Match[bytes], header_str: str) -> QBTSegment:
         """Parse regex match groups into segment object.
 
         Args:

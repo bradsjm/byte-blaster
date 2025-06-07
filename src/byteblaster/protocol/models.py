@@ -16,11 +16,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class QBTSegment:
-    """A QBTSegment represents a single data block in the QBT protocol.
+    """Represents a single data block in the Quick Block Transfer (QBT) protocol.
 
-    The Quick Block Transfer protocol divides messages into small pieces to allow
-    interruption of large, low priority messages by messages of a more immediate
-    nature. This ensures timely notification of impending severe weather events.
+    The QBTSegment class encapsulates all metadata and content for one block in the QBT
+    protocol, which divides large messages into manageable segments to enable prioritized
+    message delivery. This segmentation mechanism allows high-priority weather alerts to
+    interrupt lower-priority bulk data transfers, ensuring critical weather information
+    reaches recipients without delay.
+
+    Each segment contains comprehensive metadata including block identification (filename,
+    block number, total blocks), content validation (checksum, length), protocol versioning,
+    and timing information for delivery tracking and debugging. The class provides utilities
+    for generating unique identifiers and human-readable representations of segments.
+
+    The segment structure supports the ByteBlaster protocol's requirement for reliable,
+    ordered delivery of weather data while maintaining the ability to interrupt
+    transmissions for emergency notifications.
     """
 
     # Block identification
@@ -44,11 +55,31 @@ class QBTSegment:
 
     @property
     def key(self) -> str:
-        """Get unique key for this segment (filename + timestamp)."""
+        """Generate a unique identifier for this segment based on filename and timestamp.
+
+        Creates a composite key by combining the segment's filename with its ISO-formatted
+        timestamp, providing a unique identifier that can be used for tracking, caching,
+        or deduplication purposes. The timestamp is formatted in ISO 8601 standard to
+        ensure consistent string representation across different systems and time zones.
+
+        Returns:
+            A string in the format "filename_timestamp" where timestamp is ISO-formatted.
+
+        """
         return f"{self.filename}_{self.timestamp.isoformat()}"
 
     def __str__(self) -> str:
-        """Return string representation of this segment."""
+        """Generate a human-readable string representation of this QBT segment.
+
+        Formats the segment's key metadata into a concise, readable format suitable for
+        logging, debugging, and monitoring purposes. The string includes the filename,
+        timestamp, block position within the sequence, protocol version, and content
+        length to provide comprehensive segment identification at a glance.
+
+        Returns:
+            A formatted string containing segment identification and metadata.
+
+        """
         return (
             f"[QBTSegment] "
             f"Filename={self.filename} "
@@ -61,10 +92,23 @@ class QBTSegment:
 
 @dataclass
 class ByteBlasterServerList:
-    """Container for ByteBlaster server lists.
+    """Manages ByteBlaster server connection endpoints for weather data distribution.
 
-    Maintains both regular servers and satellite servers, with support for
-    shuffling to distribute load and updating from server-provided lists.
+    The ByteBlasterServerList class maintains comprehensive server configuration for
+    the ByteBlaster protocol, supporting both terrestrial and satellite server endpoints.
+    This class handles server discovery, validation, and management for reliable weather
+    data distribution across multiple connection points.
+
+    The server list supports dynamic updates from server-provided configurations,
+    enabling automatic failover and load distribution. It maintains separate collections
+    for regular terrestrial servers and satellite servers, allowing the protocol to
+    intelligently select appropriate connection endpoints based on availability and
+    network conditions.
+
+    Key responsibilities include parsing server list frames received from the network,
+    validating server endpoint formats, providing fallback defaults, and offering
+    unified access to all available servers. The class ensures robust server management
+    with proper error handling for malformed server configurations.
     """
 
     # Default server lists as class variables
@@ -88,7 +132,17 @@ class ByteBlasterServerList:
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
-        """Initialize with default servers if none provided."""
+        """Initialize server lists with default endpoints when no servers are provided.
+
+        Performs post-initialization setup by populating empty server lists with default
+        server configurations. This ensures the server list always contains valid
+        connection endpoints, providing reliable fallback options when dynamic server
+        discovery fails or when initializing without explicit server configuration.
+
+        The method parses default server strings into validated (host, port) tuples,
+        ensuring all default servers meet the required format standards before adding
+        them to the active server collections.
+        """
         if not self.servers:
             self.servers = [self.parse_server(server) for server in self.DEFAULT_SERVERS]
         if not self.sat_servers:
@@ -96,7 +150,29 @@ class ByteBlasterServerList:
 
     @staticmethod
     def parse_server(server_string: str) -> tuple[str, int]:
-        """Parse server string in format 'host:port' to (host, port) tuple."""
+        """Parse and validate server endpoint string into host and port components.
+
+        Converts server strings in the standard 'host:port' format into validated
+        (host, port) tuples suitable for network connections. The method performs
+        comprehensive validation including format checking, port number validation,
+        and range verification to ensure all parsed servers represent valid network
+        endpoints.
+
+        The parser uses right-side string splitting to handle IPv6 addresses and
+        hostnames containing colons correctly, ensuring robust parsing across
+        different address formats.
+
+        Args:
+            server_string: Server endpoint in format 'hostname:port' or 'ip:port'.
+
+        Returns:
+            A tuple containing (hostname, port) where port is validated integer.
+
+        Raises:
+            ValueError: If server_string format is invalid, port is non-numeric,
+                       or port number is outside valid range (1-65535).
+
+        """
         if ":" not in server_string:
             msg = f"Invalid server format: {server_string}. Expected 'host:port'"
             raise ValueError(msg)
@@ -116,16 +192,33 @@ class ByteBlasterServerList:
 
     @classmethod
     def from_server_list_frame(cls, content: str) -> "ByteBlasterServerList":
-        """Create server list from a server list frame content.
+        r"""Parse server list frame content and create a new server list instance.
+
+        Processes server list frames received from ByteBlaster servers, supporting both
+        simplified and full server list formats. The method handles dynamic server
+        configuration updates by parsing structured frame content and extracting
+        terrestrial and satellite server endpoints.
+
+        The parser supports two frame formats:
+        1. Simple format: '/ServerList/server1|server2|server3'
+        2. Full format: '/ServerList/servers\\ServerList\\/SatServers/satellites\\SatServers\\'
+
+        For the simple format, servers are pipe-delimited and only terrestrial servers
+        are specified. For the full format, the method uses regex parsing to extract
+        both terrestrial servers (pipe-delimited) and satellite servers (plus-delimited).
+
+        The method includes robust error handling, logging warnings for parsing failures
+        while filtering out invalid server entries to maintain service availability
+        with partial server lists.
 
         Args:
-            content: Raw server list frame content
+            content: Raw server list frame content containing server endpoints.
 
         Returns:
-            New ByteBlasterServerList instance
+            New ByteBlasterServerList instance populated with parsed servers.
 
         Raises:
-            ValueError: If content doesn't match expected format
+            ValueError: If content format is unrecognizable or completely unparseable.
 
         """
         # Handle simple server list format: /ServerList/server1|server2|server3
@@ -190,21 +283,61 @@ class ByteBlasterServerList:
         )
 
     def get_all_servers(self) -> list[tuple[str, int]]:
-        """Get combined list of all servers (regular + satellite)."""
+        """Retrieve unified list of all available server endpoints.
+
+        Combines terrestrial and satellite server collections into a single list,
+        providing a comprehensive view of all available connection endpoints for
+        the ByteBlaster protocol. This unified list enables connection logic to
+        iterate through all servers regardless of type, supporting automatic
+        failover and load distribution strategies.
+
+        Returns:
+            List of (hostname, port) tuples for all configured servers.
+
+        """
         return self.servers + self.sat_servers
 
     def __len__(self) -> int:
-        """Return total number of servers."""
+        """Calculate total count of all configured servers.
+
+        Provides the combined count of terrestrial and satellite servers,
+        useful for monitoring server availability, load balancing decisions,
+        and configuration validation.
+
+        Returns:
+            Total number of configured server endpoints.
+
+        """
         return len(self.servers) + len(self.sat_servers)
 
     def __bool__(self) -> bool:
-        """Return True if any servers are available."""
+        """Determine if any server endpoints are available for connections.
+
+        Evaluates server list availability by checking for the presence of either
+        terrestrial or satellite servers. This boolean evaluation enables conditional
+        logic for connection establishment and helps prevent connection attempts
+        when no servers are configured.
+
+        Returns:
+            True if at least one server endpoint is configured, False otherwise.
+
+        """
         return len(self.servers) > 0 or len(self.sat_servers) > 0
 
 
 @dataclass
 class ProtocolFrame:
-    """Base class for protocol frames."""
+    """Base class for all ByteBlaster protocol frame types.
+
+    ProtocolFrame provides the foundational structure for all frame types in the
+    ByteBlaster protocol, establishing common attributes and behaviors shared across
+    different frame categories. This base class ensures consistent frame identification,
+    content handling, and timestamp tracking throughout the protocol implementation.
+
+    The frame structure supports protocol extensibility by providing a standardized
+    foundation that specialized frame types can extend with additional functionality
+    while maintaining compatibility with core protocol handling logic.
+    """
 
     frame_type: str
     content: bytes
@@ -213,7 +346,17 @@ class ProtocolFrame:
 
 @dataclass
 class DataBlockFrame(ProtocolFrame):
-    """Frame containing a data block."""
+    """Protocol frame specialized for carrying QBT data block segments.
+
+    DataBlockFrame extends the base ProtocolFrame to handle data block transmissions
+    in the ByteBlaster protocol. This frame type encapsulates QBT segments, providing
+    structured transport for weather data blocks while maintaining protocol-level
+    metadata and timing information.
+
+    The frame automatically identifies itself as a data block type and provides
+    optional segment attachment for parsed QBT content, enabling the protocol
+    stack to efficiently process and route data blocks through the system.
+    """
 
     frame_type: str = field(default="data_block", init=False)
     segment: QBTSegment | None = None
@@ -221,7 +364,18 @@ class DataBlockFrame(ProtocolFrame):
 
 @dataclass
 class ServerListFrame(ProtocolFrame):
-    """Frame containing a server list update."""
+    """Protocol frame specialized for carrying server configuration updates.
+
+    ServerListFrame extends the base ProtocolFrame to handle dynamic server list
+    updates in the ByteBlaster protocol. This frame type enables servers to
+    distribute updated endpoint configurations to clients, supporting automatic
+    server discovery and load balancing across the network.
+
+    The frame automatically identifies itself as a server list type and provides
+    optional server list attachment for parsed configuration data, enabling the
+    protocol stack to efficiently update client-side server configurations
+    without manual intervention.
+    """
 
     frame_type: str = field(default="server_list", init=False)
     server_list: ByteBlasterServerList | None = None

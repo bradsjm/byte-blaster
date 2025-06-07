@@ -1,133 +1,94 @@
-# Python Code Generation Instructions (Python 3.12+)
+## **1. Core Philosophy: Production-Grade Solutions**
 
-## Core Philosophy
-Create production-grade, comprehensive solutions that go above and beyond basic requirements. Your code will be used in critical systems where reliability, maintainability, and correctness are paramount. Include as many relevant features, error handling scenarios, and best practices as possible unless otherwise instructed.
+Your primary directive is to create production-grade, comprehensive Python (3.12+) solutions. Go beyond the minimum requirements to build code that is robust, maintainable, and secure. Assume your code will be used in critical systems.
 
-## Tool Usage Strategy (Critical)
-**Use available tools proactively to mitigate errors and ensure accuracy:**
+-   **Think First**: Before writing code, analyze the requirements, identify edge cases, and consider potential failure modes. If requirements are ambiguous or flawed, ask for clarification.
+-   **Correctness Over Premature Optimization**: Your first priority is a correct and clear implementation.
+-   **Embrace Modern Python**: Leverage Python 3.12+ features like structural pattern matching, modern type syntax, and efficient built-ins to write elegant and performant code.
 
-Before writing any code, use thinking capabilities to plan your approach, then:
-1. **Research First**: Use documentation tools (`get-library-docs`, `resolve-library-id`) to verify API syntax and current best practices
-2. **Understand Context**: Use file system tools (`grep`, `find_path`, `read_file`) to understand existing codebase patterns
-3. **Parallel Tool Execution**: For maximum efficiency, invoke multiple independent tools simultaneously rather than sequentially
-4. **Validate Continuously**: Check diagnostics frequently during development to catch issues early
-5. **Final Verification**: Always run `ruff format`, `ruff check --fix`, and verify type checking passes
+### **2. System Design & Architecture**
 
-**Why this matters**: Tool usage prevents syntax errors, API misuse, and integration issues that waste development time and compromise code quality.
+Apply proven architectural patterns to ensure the solution is scalable, testable, and maintainable.
 
-## Type System Requirements (Zero Tolerance)
-**Complete typing prevents runtime errors and improves code maintainability:**
+-   **Separation of Concerns**:
+    -   **Layers & Modularity**: Separate data access, business logic, and presentation layers. Organize code into distinct, reusable modules.
+    -   **Single Responsibility & Complexity**: Design functions and classes that each do one thing well. If a function's cyclomatic complexity exceeds 10, it is a mandatory signal to refactor it into smaller, more focused helper functions.
+-   **Testability & Maintainability**:
+    -   **Dependency Injection**: Pass dependencies (like database connections or API clients) as arguments rather than using global objects.
+    -   **Pure Functions**: Favor pure functions with no side effects for core logic.
+-   **Data & State**:
+    -   **Data Modeling**: Use `dataclasses` for simple data structures and Pydantic models for data validation, serialization, and settings.
+    -   **Defensive Interfaces**: Validate inputs to public functions/methods. **Never access protected members (e.g., `_variable`) from outside the class or its subclasses.** Design a proper public API instead.
+-   **Asynchronous Best Practices**:
+    -   **Modern Async Patterns**: Use modern async capabilities that include async.TaskGroup for concurrent tasks and modern cancellation and exception supression code.
+    -   **Task Management**: When creating a task with `asyncio.create_task()`, you **must** store a reference to the returned task to prevent it from being garbage collected unexpectedly.
+    -   **Waiting**: Do not use `asyncio.sleep()` in a loop to wait for a condition. Use more efficient methods like `asyncio.Event`, an async iterator, or a queue.
+    -   **Concurrency**: Follow the "structured concurrency" design pattern that allows for async functions to be oblivious to timeouts, instead letting callers handle the logic with `async with`. Use `async with` and `async for` for asynchronous context managers and iterators.
 
-- **Type Everything**: Parameters, returns, attributes, critical variables - no exceptions
-- **Modern Python 3.12+ Syntax Only**:
-  ```python
-  # Correct modern syntax
-  type UserID = int
-  type UserData = dict[str, str | int]
-  def process_user(user_id: UserID) -> UserData | None:
-  ```
-- **Forbidden Legacy Syntax**: Never use `typing.TypeAlias`, `Union`, `List`, `Dict`, `Any`
-- **Structured Data**: Replace nested dicts/tuples with dataclasses or Pydantic models
-- **Runtime Safety**: Use `isinstance()` checks for `**kwargs`, `typing.cast()` only with string literals
+- **Context Management**:
+    -   **Use Context Managers**: Always use context managers (`with` statements) for resource management (e.g., file I/O, database connections) to ensure proper cleanup (PEP 343).
+    -   Use `contextmanager` decorator for custom context managers to ensure resources are properly managed and released.
 
-**Code MUST pass `basedpyright` strict mode without any errors or warnings.**
+### **3. Code Quality & Style (Ruff & basedpyright Enforced)**
 
-## Quality Standards (Non-Negotiable)
-**These limits ensure code remains maintainable and testable:**
+All code must be clean, consistently formatted, and statically verifiable. **No exceptions.**
 
-- **Function Complexity**: ≤5 parameters, <10 cyclomatic complexity, ≤50 statements
-- **Error Handling Excellence**:
-  - Catch specific exceptions (`ValueError`, `ConnectionError`, `requests.HTTPError`)
-  - Assign error messages to variables before raising: `msg = "Invalid input"; raise ValueError(msg)`
-  - No bare except blocks (use `# noqa: BLE001` only for unexpected error fallbacks)
-- **Dependency Management**: Use absolute imports, prefer standard library over third-party when possible
+-   **Static Typing (Strict)**:
+    -   Provide type hints for **all** parameters, return values, and class attributes.
+    -   Use modern type syntax: `list[int]`, `str | None`, and the `type` statement.
+    -   **Forbidden**: Do not use `typing.Any`.
+    -   **Protocol Compliance**: When implementing a protocol, method signatures **must** exactly match the protocol definition to avoid `basedpyright` errors.
+    -   **Requirement**: Code **MUST** pass `basedpyright --strict` with zero errors or warnings.
+-   **Formatting & Readability**:
+    -   **Naming**: `snake_case` for variables/functions, `PascalCase` for classes.
+    -   **Clarity**: Write code for humans first. Favor simple, unambiguous function signatures over complex `@overload` scenarios where possible.
+    -   **Requirement**: Code **MUST** pass `ruff format` and `ruff check --fix` with zero errors or warnings.
 
-## Code Style (Ruff Enforced)
-**Consistent formatting improves readability and reduces cognitive load:**
+### **4. Critical Anti-Patterns to Avoid**
 
-- **Naming**: `snake_case` for functions/variables, `PascalCase` for classes
-- **String Formatting**: F-strings exclusively - they're faster and more readable
-- **Line Length**: 88 characters maximum for optimal code review experience
-- **Unused Variables**: Remove or prefix with `_` if required for API compatibility
-- **Modern Python**: Use comprehensions, generators, and context managers where appropriate
-- **Getters/Setters**: Always use Getters when surfacing read-only variables to other classes and Setters for surfacing validation or logic requirements.
+These are common, high-impact errors that must be avoided.
 
-**All code MUST pass `ruff check --fix` without errors or warnings.**
+-   **Logging**:
+    -   **Use deferred interpolation**: Use `%`-style formatting in logging calls, not f-strings. This prevents the string from being formatted if the log level is not high enough.
+        -   `logger.info("Processing user %s", user_id)` **(Correct)**
+        -   `logger.info(f"Processing user {user_id}")` **(Incorrect)**
+    -   **Use `logger.exception` correctly**: When catching an exception you intend to log, use `logger.exception()` inside the `except` block. It automatically includes the exception info. Do not pass the exception object as an argument.
+-   **Exception Handling**:
+    -   **Be Specific**: Always catch the most specific exceptions possible. Never use a bare `except:` and avoid `except Exception:`.
+    -   **Use `contextlib.suppress` for ignored exceptions**: For exceptions you intend to ignore (e.g., `asyncio.CancelledError`), use `with contextlib.suppress(...)` instead of a `try...except...pass` block.
+-   **Datetime Usage**:
+    -   **Use timezone-aware datetimes**: Never use the deprecated `datetime.utcnow()` or `datetime.utcfromtimestamp()`. Always use timezone-aware objects with `datetime.now(UTC)` and import `UTC` from the `datetime` module.
+    -   **Measuring time**: Use `time.monotonic` for measuring elapsed time instead of `time.time()` to avoid issues with system clock changes.
 
-## Architecture Patterns
-**Apply proven patterns for maintainable, testable code:**
+### **5. Testing Strategy**
 
-- **Data Modeling**: Dataclasses for simple data, Pydantic for validation/settings
-- **Property Management**: Use `@property` for computed attributes and validation
-- **Resource Management**: Context managers for files, connections, and cleanup
-- **Pure Functions**: Favor dependency injection over global state
-- **Single Responsibility**: Each function should do one thing exceptionally well
+Write targeted, effective tests that build confidence in the code's correctness. Focus on quality over quantity. *(This section remains unchanged but is included for completeness)*.
 
-## Testing Strategy (Critical for Reliability)
-**Focus on critical complexity areas only - quality over quantity:**
+-   **Prioritize What to Test**:
+    1.  **Core Business Logic**: Algorithms, state changes, and data transformations.
+    2.  **Edge Cases**: Boundary values (`0`, `-1`), empty collections, and `None` inputs.
+    3.  **Integration Points & Error Conditions**: Interactions with databases, APIs, and file systems, including failure scenarios.
+    4.  **Skip Trivial Code**: Do not test simple getters/setters or code with no logic.
+-   **Effective Test Design**:
+    -   **Structure**: Use the Arrange-Act-Assert pattern for clarity.
+    -   **Naming**: Use descriptive names: `def test_function_name_when_condition_then_expected_behavior():`.
+    -   **Data-Driven Tests**: Use `@pytest.mark.parametrize` to test multiple scenarios concisely.
+    -   **Fixtures**: Use `pytest` fixtures in `conftest.py` for reusable setup and teardown logic.
+    -   **Test Doubles**: Use mocks and stubs to isolate the code under test from external dependencies. **Do not mock internal business logic.**
+-   **Design for Testability**: If code is difficult to test, it's a signal to refactor the design. Favor dependency injection and pure functions.
 
-### What to Test (Priority Order)
-1. **Business Logic**: Core algorithms, calculations, data transformations
-2. **Edge Cases**: Boundary values, empty collections, null/None handling
-3. **Integration Points**: External APIs, database operations, file I/O
-4. **Error Conditions**: Invalid inputs, network failures, resource exhaustion
-5. **Skip Simple Functions including Getters/Setters**: Unless they contain validation logic
+### **6. Development Workflow**
 
-### Test Design Patterns
-- **Arrange-Act-Assert**: Clear test structure with distinct phases
-- **Parametrized Tests**: `@pytest.mark.parametrize` for multiple scenarios
-- **Fixtures**: Reusable test data and setup in `conftest.py`
-- **Property-Based Testing**: Use `hypothesis` for complex logic validation
-- **Test Doubles**: Mock external dependencies, not internal business logic
-
-### Code Testability Requirements
-- **Dependency Injection**: Pass dependencies as parameters, not global imports
-- **Pure Functions**: Favor functions without side effects when possible
-- **Single Responsibility**: Complex functions indicate need for decomposition
-- **Refactor for Tests**: If testing is hard, the design needs improvement
-
-### Test Organization
-```python
-# test_module.py structure
-class TestClassName:
-    def test_method_name_when_condition_then_expected(self):
-        # Given (Arrange)
-        # When (Act)
-        # Then (Assert)
-```
-
-### Documentation Standards
-- **Docstrings**: PEP 257 format with practical examples in active voice
-- **Test Documentation**: Describe "why" not "what" in complex test scenarios
-
-## Implementation Workflow
-**Follow this sequence for optimal results:**
+Follow this structured workflow to ensure high-quality output efficiently. *(This section remains unchanged but is included for completeness)*.
 
 <thinking_guidance>
-Before implementing, think through:
-- What tools do I need to research this properly?
-- What are the edge cases and error scenarios?
-- How can I make this solution robust and general-purpose?
-- What existing patterns in the codebase should I follow?
+Before writing any code, I must formulate a plan.
+1.  **Deconstruct the Request**: What are the explicit and implicit requirements? What are the inputs, outputs, and constraints?
+2.  **Identify Unknowns & Plan Research**: What libraries or APIs are needed? I will use tools to find and read the relevant documentation to ensure I use them correctly.
+3.  **Architect the Solution**: How will I structure the code? What classes, functions, and modules are needed? How will I handle configuration, errors, and edge cases, paying special attention to the critical anti-patterns?
+4.  **Plan for Validation**: How will I test this? What are the critical test cases?
 </thinking_guidance>
 
-1. **Plan**: Use thinking capabilities to understand requirements and plan architecture
-2. **Research**: Look up documentation for any libraries or APIs you'll use
-3. **Implement**: Write comprehensive solution with full error handling
-4. **Validate**: Run diagnostics and fix all issues
-5. **Document**: Add clear docstrings and if requested, supporting documentation files
-
-## Solution Philosophy
-**Create robust, maintainable solutions that work correctly for all valid inputs:**
-
-- Implement actual logic that solves problems generally, not just specific test cases
-- Don't hard-code values or create solutions tailored only to provided examples
-- Focus on understanding problem requirements and implementing correct algorithms
-- Follow software design principles: SOLID, DRY, and appropriate design patterns
-- If requirements seem unreasonable or tests appear incorrect, communicate this clearly
-- It is always acceptable to ask for clarification prior to writing code
-
-## Output Format
-<production_code>
-Your code should be production-ready with comprehensive error handling, logging instead of print statements, and thoughtful architecture that demonstrates professional software development practices.
-</production_code>
+1.  **Plan & Research**: Use your thinking capabilities and documentation tools to create a robust plan. Use file system tools to understand the existing codebase and maintain consistency. Invoke tools in parallel for maximum efficiency.
+2.  **Implement & Document**: Write the complete, production-grade solution, including comprehensive PEP 257 docstrings with examples.
+3.  **Validate & Refine**: Proactively run `ruff format`, `ruff check --fix`, and `basedpyright` checkers. Fix as many of the reported erors as is possible and reasonable. Write and run `pytest` for the critical logic.

@@ -5,7 +5,6 @@ including logon message creation and periodic re-authentication.
 """
 
 import asyncio
-import contextlib
 import logging
 from typing import Protocol
 
@@ -88,8 +87,10 @@ class AuthenticationHandler:
 
         if self._reauth_task and not self._reauth_task.done():
             self._reauth_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._reauth_task
+            except asyncio.CancelledError:
+                logger.debug("Re-authentication task cancelled during shutdown")
 
         self._reauth_task = None
         self._auth_protocol = None
