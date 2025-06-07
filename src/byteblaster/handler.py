@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from byte_blaster import QuickBlockTransferSegment
+from byteblaster import QuickBlockTransferSegment
 
 logger = logging.getLogger(__name__)
 

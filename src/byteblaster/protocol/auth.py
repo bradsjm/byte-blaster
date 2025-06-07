@@ -9,7 +9,7 @@ import contextlib
 import logging
 from typing import Protocol
 
-from byte_blaster.utils.crypto import xor_encode_string
+from byteblaster.utils.crypto import xor_encode_string
 
 logger = logging.getLogger(__name__)
 

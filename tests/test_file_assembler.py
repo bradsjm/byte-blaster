@@ -11,8 +11,8 @@ import logging
 import pytest
 from _pytest.logging import LogCaptureFixture
 
-from byte_blaster import QBTSegment
-from byte_blaster.file_manager import FileAssembler
+from byteblaster import QBTSegment
+from byteblaster.file_manager import FileAssembler
 
 
 def create_test_segment(

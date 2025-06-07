@@ -11,7 +11,7 @@ import random
 from pathlib import Path
 from typing import Any
 
-from byte_blaster.protocol.models import ByteBlasterServerList
+from byteblaster.protocol.models import ByteBlasterServerList
 
 logger = logging.getLogger(__name__)
 

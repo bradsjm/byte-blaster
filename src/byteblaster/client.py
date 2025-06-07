@@ -12,15 +12,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from byte_blaster.protocol.auth import AuthenticationHandler, AuthProtocol
-from byte_blaster.protocol.decoder import ProtocolDecoder, DecoderState
-from byte_blaster.protocol.models import (
+from byteblaster.protocol.auth import AuthenticationHandler, AuthProtocol
+from byteblaster.protocol.decoder import ProtocolDecoder, DecoderState
+from byteblaster.protocol.models import (
     DataBlockFrame,
     ProtocolFrame,
     QBTSegment,
     ServerListFrame,
 )
-from byte_blaster.utils import ServerListManager
+from byteblaster.utils import ServerListManager
 
 logger = logging.getLogger(__name__)
 

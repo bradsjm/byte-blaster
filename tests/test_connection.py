@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from byte_blaster import ByteBlasterClient, QBTSegment
-from byte_blaster.client import ByteBlasterClientOptions
+from byteblaster import ByteBlasterClient, QBTSegment
+from byteblaster.client import ByteBlasterClientOptions
 
 
 @pytest.mark.asyncio

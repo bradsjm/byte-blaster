@@ -6,8 +6,8 @@ from collections import deque
 from collections.abc import Callable, Coroutine
 from typing import Any, NamedTuple
 
-from byte_blaster.client import ByteBlasterClient, ByteBlasterClientOptions
-from byte_blaster.protocol import QBTSegment
+from byteblaster.client import ByteBlasterClient, ByteBlasterClientOptions
+from byteblaster.protocol import QBTSegment
 
 logger = logging.getLogger(__name__)
 

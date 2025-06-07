@@ -11,14 +11,14 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import Enum
 
-from byte_blaster.protocol.models import (
+from byteblaster.protocol.models import (
     ByteBlasterServerList,
     DataBlockFrame,
     ProtocolFrame,
     QBTSegment,
     ServerListFrame,
 )
-from byte_blaster.utils.crypto import XorBuffer, decompress_zlib, verify_checksum
+from byteblaster.utils.crypto import XorBuffer, decompress_zlib, verify_checksum
 
 logger = logging.getLogger(__name__)
 

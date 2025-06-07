@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from byte_blaster.client import ByteBlasterClientOptions, ByteBlasterClient
-from byte_blaster.file_manager import ByteBlasterFileManager, CompletedFile
+from byteblaster.client import ByteBlasterClientOptions, ByteBlasterClient
+from byteblaster.file_manager import ByteBlasterFileManager, CompletedFile
 
 
 @pytest.fixture

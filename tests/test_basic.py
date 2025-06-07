@@ -5,14 +5,14 @@ import pytest
 
 
 
-from byte_blaster import (
+from byteblaster import (
     ByteBlasterClient,
     QBTSegment,
     ByteBlasterServerList,
     ServerListManager,
 )
-from byte_blaster.client import ByteBlasterClientOptions
-from byte_blaster.utils.crypto import xor_encode, xor_decode, verify_checksum
+from byteblaster.client import ByteBlasterClientOptions
+from byteblaster.utils.crypto import xor_encode, xor_decode, verify_checksum
 
 
 @pytest.fixture

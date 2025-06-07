@@ -14,7 +14,7 @@ from pathlib import Path
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from byte_blaster import (
+from byteblaster import (
     ByteBlasterClientOptions,
     ByteBlasterFileManager,
     CompletedFile,

@@ -49,17 +49,17 @@ Example usage:
     ```
 """
 
-from byte_blaster.client import ByteBlasterClient, ByteBlasterClientOptions
-from byte_blaster.file_manager import (
+from byteblaster.client import ByteBlasterClient, ByteBlasterClientOptions
+from byteblaster.file_manager import (
     ByteBlasterFileManager,
     CompletedFile,
     FileAssembler,
 )
-from byte_blaster.protocol.models import (
+from byteblaster.protocol.models import (
     ByteBlasterServerList,
     QBTSegment,
 )
-from byte_blaster.utils import ServerListManager
+from byteblaster.utils import ServerListManager
 
 __version__ = "1.0.0"
 __author__ = "ByteBlaster Python Team"

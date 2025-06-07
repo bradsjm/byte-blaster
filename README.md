@@ -37,7 +37,7 @@ pip install -e ".[dev,test]"
 
 ```python
 import asyncio
-from byte_blaster import ByteBlasterFileManager, CompletedFile
+from byteblaster import ByteBlasterFileManager, CompletedFile
 
 async def handle_file(file: CompletedFile):
     """Handler for completed files."""
@@ -107,7 +107,7 @@ python example.py
 The recommended high-level client for most use cases. It abstracts away segment handling and provides a simple interface for receiving complete files.
 
 ```python
-from byte_blaster import ByteBlasterFileManager, ByteBlasterClientOptions
+from byteblaster import ByteBlasterFileManager, ByteBlasterClientOptions
 
 # Configure the client with your email
 options = ByteBlasterClientOptions(email="your-email@example.com")
@@ -256,7 +256,7 @@ The client includes comprehensive error handling:
 pytest
 
 # Run with coverage
-pytest --cov=byte_blaster
+pytest --cov=byteblaster
 
 # Run specific test categories
 pytest -m unit          # Unit tests only
