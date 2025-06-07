@@ -1,4 +1,4 @@
-"""ByteBlaster - Python implementation of the EMWIN ByteBlaster protocol.
+r"""ByteBlaster - Python implementation of the EMWIN ByteBlaster protocol.
 
 This package provides a client for connecting to ByteBlaster servers and receiving
 EMWIN (Emergency Managers Weather Information Network) data using the Quick Block
