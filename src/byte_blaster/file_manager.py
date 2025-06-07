@@ -3,7 +3,8 @@
 import asyncio
 import logging
 from collections import deque
-from typing import Callable, Coroutine, NamedTuple, Any
+from collections.abc import Callable, Coroutine
+from typing import Any, NamedTuple
 
 from byte_blaster.client import ByteBlasterClient, ByteBlasterClientOptions
 from byte_blaster.protocol import QBTSegment
@@ -46,12 +47,13 @@ class FileAssembler:
 
         Args:
             segment: The received segment.
+
         """
         file_key = segment.key
 
         # Check if this is a duplicate of a recently completed file
         if file_key in self._recently_completed:
-            logger.debug("Skipping segment for duplicate file: %s", file_key)
+            logger.info("Skipping segment for duplicate file: %s", file_key)
             return
 
         # Skip FILLFILE.TXT - it's filler data when no real data is being transmitted
@@ -62,6 +64,11 @@ class FileAssembler:
         if file_key not in self.file_segments:
             self.file_segments[file_key] = []
 
+        # Check for duplicate segments before appending
+        if any(s.block_number == segment.block_number for s in self.file_segments[file_key]):
+            logger.debug(f"Skipping duplicate segment: {file_key}, block {segment.block_number}")
+            return
+
         self.file_segments[file_key].append(segment)
 
         # Check if we have all segments for this file
@@ -69,9 +76,7 @@ class FileAssembler:
         if len(segments) == segment.total_blocks:
             await self._reconstruct_and_notify(file_key, segments)
 
-    async def _reconstruct_and_notify(
-        self, file_key: str, segments: list[QBTSegment]
-    ) -> None:
+    async def _reconstruct_and_notify(self, file_key: str, segments: list[QBTSegment]) -> None:
         """Reconstruct a file from its segments and notify the consumer."""
         try:
             # Sort segments by block number
@@ -101,8 +106,7 @@ class FileAssembler:
 
 
 class ByteBlasterFileManager:
-    """
-    A high-level manager for the ByteBlaster client that abstracts away
+    """A high-level manager for the ByteBlaster client that abstracts away
     segment and block handling, providing a simple interface for receiving
     completed files.
     """
@@ -115,6 +119,7 @@ class ByteBlasterFileManager:
 
         Args:
             options: Configuration options for the underlying client.
+
         """
         self._client = ByteBlasterClient(options)
         self._assembler = FileAssembler(self._dispatch_file)
@@ -133,16 +138,20 @@ class ByteBlasterFileManager:
 
     def subscribe(self, handler: FileCompletionCallback) -> None:
         """Subscribe to completed file events.
+
         Args:
             handler: Async function to call when files are completed.
+
         """
         if handler not in self._file_handlers:
             self._file_handlers.append(handler)
 
     def unsubscribe(self, handler: FileCompletionCallback) -> None:
         """Unsubscribe from completed file events.
+
         Args:
             handler: The handler function to remove.
+
         """
         try:
             self._file_handlers.remove(handler)
@@ -164,5 +173,6 @@ class ByteBlasterFileManager:
 
         Args:
             timeout: Optional timeout in seconds to wait for shutdown.
+
         """
         await self._client.stop(timeout=timeout)
