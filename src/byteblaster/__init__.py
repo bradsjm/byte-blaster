@@ -9,7 +9,7 @@ Example usage:
     import asyncio
     from pathlib import Path
 
-    from byte_blaster import (
+    from byteblaster import (
         ByteBlasterClientOptions,
         ByteBlasterFileManager,
         CompletedFile,

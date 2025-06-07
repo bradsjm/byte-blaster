@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from byteblaster.protocol.auth import AuthenticationHandler, AuthProtocol
-from byteblaster.protocol.decoder import ProtocolDecoder, DecoderState
+from byteblaster.protocol.decoder import DecoderState, ProtocolDecoder
 from byteblaster.protocol.models import (
     DataBlockFrame,
     ProtocolFrame,

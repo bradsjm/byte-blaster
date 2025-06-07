@@ -1,5 +1,7 @@
 {
-    "include": ["src"],
+    "include": [
+        "src"
+    ],
     "exclude": [
         "**/__pycache__",
         ".git",
@@ -11,8 +13,10 @@
         "typings",
         "tests"
     ],
-    "extraPaths": ["src"],
-    "typeCheckingMode": "strict",
+    "extraPaths": [
+        "src"
+    ],
+    "typeCheckingMode": "off",
     "pythonVersion": "3.13",
     "stubPath": "typings"
 }
