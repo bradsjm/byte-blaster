@@ -6,8 +6,10 @@ Block Transfer protocol.
 """
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Callable
+import types
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -25,6 +27,82 @@ logger = logging.getLogger(__name__)
 
 type SegmentHandler = Callable[[QBTSegment], None]
 type AsyncSegmentHandler = Callable[[QBTSegment], Any]
+
+
+class SegmentStream:
+    """Async iterator for streaming segments with backpressure support.
+
+    This class provides an async iterator interface for receiving QBT segments,
+    offering structured concurrency and natural backpressure handling. It can be
+    used with 'async with' and 'async for' patterns for reactive programming.
+
+    The stream automatically subscribes to segment events when entering the context
+    and unsubscribes when exiting, ensuring proper resource cleanup. If the internal
+    queue becomes full, new segments are dropped with logging to prevent memory issues.
+    """
+
+    def __init__(self, client: "ByteBlasterClient", max_queue_size: int = 1000) -> None:
+        """Initialize segment stream with client and queue configuration.
+
+        Args:
+            client: ByteBlasterClient instance to stream segments from
+            max_queue_size: Maximum number of segments to buffer (default: 1000)
+
+        """
+        self._client = client
+        self._queue: asyncio.Queue[QBTSegment | None] = asyncio.Queue(maxsize=max_queue_size)
+        self._closed = False
+
+    async def __aenter__(self) -> "SegmentStream":
+        """Start streaming when entering context."""
+        self._client.subscribe(self._enqueue_segment)
+        logger.debug("Started segment stream")
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        """Clean up when exiting context."""
+        self._closed = True
+        self._client.unsubscribe(self._enqueue_segment)
+
+        # Signal end of stream
+        with contextlib.suppress(asyncio.QueueFull):
+            self._queue.put_nowait(None)
+
+        logger.debug("Stopped segment stream")
+
+    def __aiter__(self) -> AsyncIterator[QBTSegment]:
+        """Return self as async iterator."""
+        return self
+
+    async def __anext__(self) -> QBTSegment:
+        """Get next segment from stream."""
+        while True:
+            item = await self._queue.get()
+            if item is None or self._closed:
+                raise StopAsyncIteration
+            return item
+
+    async def _enqueue_segment(self, segment: QBTSegment) -> None:
+        """Queue segment for async iteration with backpressure."""
+        if self._closed:
+            return
+
+        try:
+            # Use put_nowait to avoid blocking the event loop
+            # If queue is full, we drop the segment and log a warning
+            self._queue.put_nowait(segment)
+        except asyncio.QueueFull:
+            logger.warning(
+                "Segment stream queue full, dropping segment: %s (block %d/%d)",
+                segment.filename,
+                segment.block_number,
+                segment.total_blocks,
+            )
 
 
 class ConnectionProtocol(asyncio.Protocol, AuthProtocol):
@@ -481,6 +559,29 @@ class ByteBlasterClient:
         if handler in self._segment_handlers:
             self._segment_handlers.remove(handler)
             logger.debug("Removed segment handler: %s", handler)
+
+    def stream_segments(self, max_queue_size: int = 1000) -> SegmentStream:
+        """Create an async iterator for streaming segments.
+
+        This method returns a SegmentStream that implements the async iterator protocol,
+        allowing you to use 'async with' and 'async for' patterns for reactive segment
+        processing. The stream provides natural backpressure handling and structured
+        concurrency support.
+
+        Example usage:
+            async with client.stream_segments() as segments:
+                async for segment in segments:
+                    await process_segment(segment)
+
+        Args:
+            max_queue_size: Maximum number of segments to buffer before dropping
+                          new segments (default: 1000)
+
+        Returns:
+            SegmentStream that can be used as an async context manager and iterator
+
+        """
+        return SegmentStream(self, max_queue_size)
 
     async def start(self) -> None:
         """Start the ByteBlaster client and begin connection operations.

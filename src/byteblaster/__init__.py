@@ -26,7 +26,14 @@ Example usage:
     async def main() -> None:
         options = ByteBlasterClientOptions(email="user@example.com")
         file_manager = ByteBlasterFileManager(options)
+
+        # Option 1: Callback-based approach
         file_manager.subscribe(save_file)
+
+        # Option 2: Async iterator approach
+        # async with file_manager.stream_files() as files:
+        #     async for file in files:
+        #         await save_file(file)
 
         await file_manager.start()
         print("Client started, waiting for files...")
@@ -49,11 +56,12 @@ Example usage:
     ```
 """
 
-from byteblaster.client import ByteBlasterClient, ByteBlasterClientOptions
+from byteblaster.client import ByteBlasterClient, ByteBlasterClientOptions, SegmentStream
 from byteblaster.file_manager import (
     ByteBlasterFileManager,
     CompletedFile,
     FileAssembler,
+    FileStream,
 )
 from byteblaster.protocol.models import (
     ByteBlasterServerList,
@@ -72,6 +80,8 @@ __all__ = [
     "ByteBlasterServerList",
     "CompletedFile",
     "FileAssembler",
+    "FileStream",
     "QBTSegment",
+    "SegmentStream",
     "ServerListManager",
 ]

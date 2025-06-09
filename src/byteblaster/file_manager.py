@@ -7,9 +7,11 @@ detection and error handling capabilities.
 """
 
 import asyncio
+import contextlib
 import logging
+import types
 from collections import deque
-from collections.abc import Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine
 from typing import Any, NamedTuple
 
 from byteblaster.client import ByteBlasterClient, ByteBlasterClientOptions
@@ -37,6 +39,82 @@ class CompletedFile(NamedTuple):
 
 
 FileCompletionCallback = Callable[[CompletedFile], Coroutine[Any, Any, None]]
+
+
+class FileStream:
+    """Async iterator for streaming completed files with backpressure support.
+
+    This class provides an async iterator interface for receiving completed files,
+    offering structured concurrency and natural backpressure handling. It can be
+    used with 'async with' and 'async for' patterns for reactive file processing.
+
+    The stream automatically subscribes to file completion events when entering the
+    context and unsubscribes when exiting, ensuring proper resource cleanup. If the
+    internal queue becomes full, new files are dropped with logging to prevent
+    memory issues.
+    """
+
+    def __init__(self, file_manager: "ByteBlasterFileManager", max_queue_size: int = 100) -> None:
+        """Initialize file stream with manager and queue configuration.
+
+        Args:
+            file_manager: ByteBlasterFileManager instance to stream files from
+            max_queue_size: Maximum number of files to buffer (default: 100)
+
+        """
+        self._file_manager = file_manager
+        self._queue: asyncio.Queue[CompletedFile | None] = asyncio.Queue(maxsize=max_queue_size)
+        self._closed = False
+
+    async def __aenter__(self) -> "FileStream":
+        """Start streaming when entering context."""
+        self._file_manager.subscribe(self._enqueue_file)
+        logger.debug("Started file stream")
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        """Clean up when exiting context."""
+        self._closed = True
+        self._file_manager.unsubscribe(self._enqueue_file)
+
+        # Signal end of stream
+        with contextlib.suppress(asyncio.QueueFull):
+            self._queue.put_nowait(None)
+
+        logger.debug("Stopped file stream")
+
+    def __aiter__(self) -> AsyncIterator[CompletedFile]:
+        """Return self as async iterator."""
+        return self
+
+    async def __anext__(self) -> CompletedFile:
+        """Get next completed file from stream."""
+        while True:
+            item = await self._queue.get()
+            if item is None or self._closed:
+                raise StopAsyncIteration
+            return item
+
+    async def _enqueue_file(self, file: CompletedFile) -> None:
+        """Queue file for async iteration with backpressure."""
+        if self._closed:
+            return
+
+        try:
+            # Use put_nowait to avoid blocking the event loop
+            # If queue is full, we drop the file and log a warning
+            self._queue.put_nowait(file)
+        except asyncio.QueueFull:
+            logger.warning(
+                "File stream queue full, dropping file: %s (%d bytes)",
+                file.filename,
+                len(file.data),
+            )
 
 
 class FileAssembler:
@@ -278,6 +356,29 @@ class ByteBlasterFileManager:
             self._file_handlers.remove(handler)
         except ValueError:
             logger.warning("Handler not found in subscribers list.")
+
+    def stream_files(self, max_queue_size: int = 100) -> FileStream:
+        """Create an async iterator for streaming completed files.
+
+        This method returns a FileStream that implements the async iterator protocol,
+        allowing you to use 'async with' and 'async for' patterns for reactive file
+        processing. The stream provides natural backpressure handling and structured
+        concurrency support.
+
+        Example usage:
+            async with file_manager.stream_files() as files:
+                async for completed_file in files:
+                    await process_file(completed_file)
+
+        Args:
+            max_queue_size: Maximum number of files to buffer before dropping
+                          new files (default: 100)
+
+        Returns:
+            FileStream that can be used as an async context manager and iterator
+
+        """
+        return FileStream(self, max_queue_size)
 
     async def _dispatch_file(self, file: CompletedFile) -> None:
         """Dispatch a completed file to all subscribed handlers using TaskGroup.
