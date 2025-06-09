@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from byteblaster import QuickBlockTransferSegment
+from byteblaster.protocol.models import QBTSegment
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +47,9 @@ class WeatherDataHandler:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        self.file_segments: dict[str, list[QuickBlockTransferSegment]] = {}
+        self.file_segments: dict[str, list[QBTSegment]] = {}
 
-    async def handle_segment(self, segment: QuickBlockTransferSegment) -> None:
+    async def handle_segment(self, segment: QBTSegment) -> None:
         """Process an incoming weather data segment and trigger reconstruction when complete.
 
         This method implements the core segment processing logic for the ByteBlaster
@@ -96,9 +96,7 @@ class WeatherDataHandler:
         if len(segments) == segment.total_blocks:
             await self._reconstruct_file(file_key, segments)
 
-    async def _reconstruct_file(
-        self, file_key: str, segments: list[QuickBlockTransferSegment]
-    ) -> None:
+    async def _reconstruct_file(self, file_key: str, segments: list[QBTSegment]) -> None:
         """Reconstruct a complete file from its segments and write to disk.
 
         This method handles the final phase of file reconstruction by sorting segments

@@ -2,6 +2,11 @@
 
 A comprehensive Python implementation of the **EMWIN Quick Block Transfer (QBT)** protocol for receiving real-time weather data from the National Weather Service. This protocol is also commonly known as **ByteBlaster**.
 
+## Requirements
+
+- **Python 3.12+** (Python 3.13 recommended for best performance)
+- No external dependencies required for core functionality
+
 ## Overview
 
 The EMWIN QBT protocol uses Quick Block Transfer (QBT) to efficiently deliver weather data, forecasts, warnings, and satellite imagery. This Python client provides a robust, asynchronous implementation with automatic reconnection, server failover, and comprehensive error handling.

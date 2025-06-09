@@ -5,18 +5,20 @@ description = "Python implementation of the EMWIN QBT broadcast protocol for rec
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Jonathan Bradshaw", email = "jb@nrgup.net" }]
 keywords = ["emwin", "byteblaster", "weather", "noaa", "quickblocktransfer"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Communications",
     "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Typing :: Typed",
 ]
 
 [project.urls]
@@ -32,6 +34,12 @@ test = ["pytest>=8.4.0", "pytest-asyncio>=0.23.0", "pytest-mock>=3.14.0"]
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+byteblaster = ["py.typed"]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-markers", "--strict-config"]
@@ -78,6 +86,9 @@ ignore = [
 max-line-length = 120
 
 [tool.ruff.format]
+
+[dependency-groups]
+dev = ["build>=1.2.2.post1", "setuptools>=80.9.0", "wheel>=0.45.1"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]   # Allow asserts in test files

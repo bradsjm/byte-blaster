@@ -12,6 +12,17 @@
         "tests"
     ],
     "extraPaths": ["src"],
-    "typeCheckingMode": "off",
-    "pythonVersion": "3.13"
+    "typeCheckingMode": "strict",
+    "pythonVersion": "3.12",
+    "reportMissingTypeStubs": false,
+    "reportImportCycles": false,
+    "reportUnusedImport": true,
+    "reportUnusedClass": true,
+    "reportUnusedFunction": true,
+    "reportUnusedVariable": true,
+    "reportDuplicateImport": true,
+    "strictParameterNoneValue": true,
+    "strictDictionaryInference": true,
+    "strictListInference": true,
+    "strictSetInference": true
 }

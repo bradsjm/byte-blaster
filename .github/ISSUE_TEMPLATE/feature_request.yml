@@ -1,0 +1,142 @@
+name: Feature Request
+description: Suggest an idea for this project
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: ["bradsjm"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature for byte-blaster!
+
+        Please provide as much detail as possible to help us understand your request and evaluate its implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Is your feature request related to a problem?
+      description: A clear and concise description of what the problem is.
+      placeholder: "I'm frustrated when... / It would be helpful if... / Currently there's no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Describe the solution you'd like
+      description: A clear and concise description of what you want to happen.
+      placeholder: "I would like to be able to... / The library should provide..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Describe alternatives you've considered
+      description: A clear and concise description of any alternative solutions or features you've considered.
+      placeholder: "I've considered... / Another approach could be... / Currently I work around this by..."
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What category does this feature fall into?
+      options:
+        - API Enhancement
+        - Performance Improvement
+        - New Protocol Support
+        - Developer Experience
+        - Documentation
+        - Testing/Validation
+        - Configuration
+        - Error Handling
+        - Logging/Monitoring
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would be helpful
+        - High - Important for my use case
+        - Critical - Blocking my work
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case Details
+      description: Describe your specific use case and how this feature would help
+      placeholder: |
+        - What are you trying to accomplish?
+        - How would this feature fit into your workflow?
+        - What benefits would this provide?
+
+  - type: textarea
+    id: api-design
+    attributes:
+      label: Proposed API Design (if applicable)
+      description: If you have ideas about how the API should look, share them here
+      render: python
+      placeholder: |
+        # Example of how you envision the feature working
+        from byteblaster import NewFeature
+
+        client = ByteBlasterClient(options)
+        result = client.new_feature_method()
+
+  - type: textarea
+    id: implementation-ideas
+    attributes:
+      label: Implementation Ideas
+      description: If you have thoughts on how this could be implemented, share them here
+      placeholder: |
+        - Technical approach suggestions
+        - Dependencies that might be needed
+        - Potential challenges to consider
+        - Performance considerations
+
+  - type: textarea
+    id: breaking-changes
+    attributes:
+      label: Breaking Changes
+      description: Would this feature require any breaking changes to the existing API?
+      placeholder: |
+        - Would this change existing behavior?
+        - Are there backward compatibility concerns?
+        - How could migration be handled?
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or examples about the feature request here
+      placeholder: |
+        - Related issues or discussions
+        - Links to documentation or specifications
+        - Examples from other libraries
+        - Screenshots or diagrams (if applicable)
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to ensure this feature hasn't been requested before
+          required: true
+        - label: I have clearly described the problem this feature would solve
+          required: true
+        - label: I have provided specific use case details
+          required: true
+        - label: I am willing to help test this feature once implemented
+          required: false
+        - label: I am interested in contributing to the implementation (if guidance is provided)
+          required: false

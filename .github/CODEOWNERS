@@ -1,0 +1,80 @@
+# Code Owners for byte-blaster
+#
+# This file defines who should review pull requests for different parts of the codebase.
+# Users and teams mentioned here will be automatically requested for review when someone
+# opens a pull request that modifies code in their areas of responsibility.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback - applies to everything unless a more specific rule matches
+* @bradsjm
+
+# Python source code
+src/ @bradsjm
+src/byteblaster/ @bradsjm
+src/byteblaster/protocol/ @bradsjm
+src/byteblaster/utils/ @bradsjm
+
+# Tests
+tests/ @bradsjm
+
+# CI/CD and automation
+.github/ @bradsjm
+.github/workflows/ @bradsjm
+scripts/ @bradsjm
+
+# Documentation
+docs/ @bradsjm
+*.md @bradsjm
+*.rst @bradsjm
+
+# Package configuration and dependencies
+pyproject.toml @bradsjm
+requirements*.txt @bradsjm
+uv.lock @bradsjm
+Pipfile* @bradsjm
+setup.py @bradsjm
+setup.cfg @bradsjm
+MANIFEST.in @bradsjm
+
+# Type checking configuration
+pyrightconfig.json @bradsjm
+mypy.ini @bradsjm
+.mypy.ini @bradsjm
+
+# Code quality configuration
+.ruff.toml @bradsjm
+ruff.toml @bradsjm
+.pre-commit-config.yaml @bradsjm
+
+# Git configuration
+.gitignore @bradsjm
+.gitattributes @bradsjm
+
+# License and legal
+LICENSE* @bradsjm
+COPYRIGHT* @bradsjm
+
+# Security-related files
+.github/dependabot.yml @bradsjm
+SECURITY.md @bradsjm
+
+# Release and versioning
+CHANGELOG.md @bradsjm
+HISTORY.md @bradsjm
+NEWS.md @bradsjm
+scripts/release.py @bradsjm
+
+# Examples and tutorials
+examples/ @bradsjm
+example.py @bradsjm
+
+# Docker and containerization (if added in future)
+Dockerfile* @bradsjm
+docker-compose*.yml @bradsjm
+.dockerignore @bradsjm
+
+# IDE configuration
+.vscode/ @bradsjm
+.idea/ @bradsjm
+*.code-workspace @bradsjm

@@ -1,0 +1,205 @@
+name: Dependency Update
+
+on:
+    schedule:
+        # Run weekly on Mondays at 9 AM UTC
+        - cron: "0 9 * * 1"
+    workflow_dispatch:
+
+permissions:
+    contents: write
+    pull-requests: write
+
+jobs:
+    update-dependencies:
+        name: Update Dependencies
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+              with:
+                  enable-cache: true
+
+            - name: Update dependencies
+              id: update
+              run: |
+                  # Create backup of current lock file
+                  cp uv.lock uv.lock.backup
+
+                  # Update dependencies
+                  uv sync --upgrade
+
+                  # Check if anything changed
+                  if ! diff -q uv.lock uv.lock.backup > /dev/null 2>&1; then
+                    echo "dependencies-updated=true" >> $GITHUB_OUTPUT
+                    echo "Dependencies were updated"
+                  else
+                    echo "dependencies-updated=false" >> $GITHUB_OUTPUT
+                    echo "No dependency updates available"
+                  fi
+
+            - name: Run tests with updated dependencies
+              if: steps.update.outputs.dependencies-updated == 'true'
+              run: |
+                  uv sync --dev
+                  uv run pytest
+
+            - name: Run type checking
+              if: steps.update.outputs.dependencies-updated == 'true'
+              run: |
+                  uv add --dev basedpyright
+                  uv run basedpyright src/byteblaster
+
+            - name: Run linting
+              if: steps.update.outputs.dependencies-updated == 'true'
+              run: |
+                  uv run ruff check
+                  uv run ruff format --check
+
+            - name: Validate typing configuration
+              if: steps.update.outputs.dependencies-updated == 'true'
+              run: uv run python scripts/validate_typing.py
+
+            - name: Generate update summary
+              if: steps.update.outputs.dependencies-updated == 'true'
+              id: summary
+              run: |
+                  echo "## Dependency Updates" > update_summary.md
+                  echo "" >> update_summary.md
+                  echo "This PR updates project dependencies to their latest compatible versions." >> update_summary.md
+                  echo "" >> update_summary.md
+                  echo "### Changes" >> update_summary.md
+                  echo "" >> update_summary.md
+
+                  # Compare lock files to show what changed
+                  if command -v uv >/dev/null 2>&1; then
+                    echo "Updated dependencies:" >> update_summary.md
+                    echo "\`\`\`" >> update_summary.md
+                    echo "See uv.lock for detailed changes" >> update_summary.md
+                    echo "\`\`\`" >> update_summary.md
+                  fi
+
+                  echo "" >> update_summary.md
+                  echo "### Validation" >> update_summary.md
+                  echo "" >> update_summary.md
+                  echo "- ✅ All tests pass" >> update_summary.md
+                  echo "- ✅ Type checking passes" >> update_summary.md
+                  echo "- ✅ Linting passes" >> update_summary.md
+                  echo "- ✅ Typing configuration validated" >> update_summary.md
+                  echo "" >> update_summary.md
+                  echo "This update is safe to merge." >> update_summary.md
+
+            - name: Create Pull Request
+              if: steps.update.outputs.dependencies-updated == 'true'
+              uses: peter-evans/create-pull-request@v6
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  commit-message: "chore: update dependencies"
+                  title: "chore: update dependencies"
+                  body-path: update_summary.md
+                  branch: dependency-updates
+                  delete-branch: true
+                  labels: |
+                      dependencies
+                      automated-pr
+                  assignees: ${{ github.actor }}
+
+    security-audit:
+        name: Security Audit
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+              with:
+                  enable-cache: true
+
+            - name: Install dependencies
+              run: uv sync --dev
+
+            - name: Run security audit
+              run: |
+                  uv add --dev safety
+                  uv run safety check --json --output security-report.json || true
+
+            - name: Check for vulnerabilities
+              id: vulnerabilities
+              run: |
+                  if [ -f security-report.json ]; then
+                    VULN_COUNT=$(jq '.vulnerabilities | length' security-report.json 2>/dev/null || echo "0")
+                    echo "vulnerability-count=$VULN_COUNT" >> $GITHUB_OUTPUT
+
+                    if [ "$VULN_COUNT" -gt "0" ]; then
+                      echo "Found $VULN_COUNT vulnerabilities"
+                      jq '.vulnerabilities[] | "- \(.vulnerability_id): \(.package_name) \(.vulnerable_spec)"' -r security-report.json
+                    else
+                      echo "No vulnerabilities found"
+                    fi
+                  fi
+
+            - name: Create security issue
+              if: steps.vulnerabilities.outputs.vulnerability-count != '0'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const vulnCount = ${{ steps.vulnerabilities.outputs.vulnerability-count }};
+
+                      if (vulnCount > 0) {
+                        let body = `## Security Vulnerabilities Detected\n\n`;
+                        body += `Found ${vulnCount} security vulnerabilities in dependencies.\n\n`;
+                        body += `### Action Required\n\n`;
+                        body += `Please review and update the affected dependencies:\n\n`;
+
+                        try {
+                          const report = JSON.parse(fs.readFileSync('security-report.json', 'utf8'));
+                          if (report.vulnerabilities) {
+                            body += `### Vulnerabilities\n\n`;
+                            report.vulnerabilities.forEach(vuln => {
+                              body += `- **${vuln.vulnerability_id}**: ${vuln.package_name} ${vuln.vulnerable_spec}\n`;
+                              body += `  - ${vuln.advisory}\n\n`;
+                            });
+                          }
+                        } catch (e) {
+                          body += `See security-report.json artifact for details.\n\n`;
+                        }
+
+                        body += `### Next Steps\n\n`;
+                        body += `1. Review the vulnerabilities above\n`;
+                        body += `2. Update affected dependencies\n`;
+                        body += `3. Test thoroughly\n`;
+                        body += `4. Close this issue when resolved\n`;
+
+                        github.rest.issues.create({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          title: `Security: ${vulnCount} vulnerabilities found in dependencies`,
+                          body: body,
+                          labels: ['security', 'dependencies', 'high-priority']
+                        });
+                      }
+
+            - name: Upload security report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: security-audit-report
+                  path: security-report.json
+                  retention-days: 90
