@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from byteblaster import (
     ByteBlasterClientOptions,
@@ -53,14 +53,15 @@ class FileSaver:
             output_path.write_bytes(file.data)
             self.completed_files_count += 1
             self.total_bytes_received += len(file.data)
-            print(f"✓ Saved complete file: {output_path} ({len(file.data)} bytes)")
+            logger.info("✓ Saved complete file: %s (%d bytes)", output_path, len(file.data))
             if self.completed_files_count % 10 == 0:
-                print(
-                    f"Total files saved: {self.completed_files_count}, "
-                    f"Total bytes: {self.total_bytes_received / 1024:.2f} KB"
+                logger.info(
+                    "Total files saved: %d, Total bytes: %.2f KB",
+                    self.completed_files_count,
+                    self.total_bytes_received / 1024,
                 )
-        except OSError as e:
-            print(f"✗ Failed to save {output_path}: {e}")
+        except OSError:
+            logger.exception("✗ Failed to save %s", output_path)
 
 
 class FileValidator:
@@ -78,18 +79,22 @@ class FileValidator:
         try:
             # Example validation: check if file is not empty and has reasonable size
             if len(file.data) == 0:
-                print(f"⚠ Warning: Empty file detected: {file.filename}")
+                logger.warning("⚠ Warning: Empty file detected: %s", file.filename)
                 return
 
             if len(file.data) > 50 * 1024 * 1024:  # 50MB threshold
-                print(f"⚠ Warning: Large file detected: {file.filename} ({len(file.data)} bytes)")
+                logger.warning(
+                    "⚠ Warning: Large file detected: %s (%d bytes)",
+                    file.filename,
+                    len(file.data),
+                )
 
             self.validated_count += 1
             if self.validated_count % 25 == 0:
-                print(f"📋 Validated {self.validated_count} files")
+                logger.info("📋 Validated %d files", self.validated_count)
 
-        except (OSError, ValueError) as e:
-            print(f"✗ Validation error for {file.filename}: {e}")
+        except (OSError, ValueError):
+            logger.exception("✗ Validation error for %s", file.filename)
 
 
 class FileStats:
@@ -113,10 +118,10 @@ class FileStats:
 
             # Print stats every 50 files
             if self.total_files % 50 == 0:
-                print(f"📊 File type stats: {dict(sorted(self.file_types.items()))}")
+                logger.info("📊 File type stats: %s", dict(sorted(self.file_types.items())))
 
-        except (OSError, ValueError) as e:
-            print(f"✗ Stats collection error for {file.filename}: {e}")
+        except (OSError, ValueError):
+            logger.exception("✗ Stats collection error for %s", file.filename)
 
 
 async def main() -> None:
@@ -131,20 +136,20 @@ async def main() -> None:
     # Email for authentication (replace with your email)
     email = "jb@nrgup.net"
 
-    print("ByteBlaster Example Client")
-    print(f"Email: {email}")
-    print("Press Ctrl+C to stop\n")
+    logger.info("ByteBlaster Example Client")
+    logger.info("Email: %s", email)
+    logger.info("Press Ctrl+C to stop")
 
     # Create multiple concurrent file handlers to demonstrate TaskGroup benefits
     file_saver = FileSaver("weather_data")
     file_validator = FileValidator()
     file_stats = FileStats()
 
-    print("Handlers configured:")
-    print("  - File Saver: Saves files to disk")
-    print("  - File Validator: Validates file content")
-    print("  - File Stats: Collects file statistics")
-    print("All handlers will process files concurrently using asyncio.TaskGroup\n")
+    logger.info("Handlers configured:")
+    logger.info("  - File Saver: Saves files to disk")
+    logger.info("  - File Validator: Validates file content")
+    logger.info("  - File Stats: Collects file statistics")
+    logger.info("All handlers will process files concurrently using asyncio.TaskGroup")
 
     # Create client options
     options = ByteBlasterClientOptions(
@@ -162,11 +167,14 @@ async def main() -> None:
     file_manager.subscribe(file_validator.validate_file)
     file_manager.subscribe(file_stats.collect_stats)
 
+    logger.info("Note: This example uses the callback-based approach.")
+    logger.info("For async iterator examples, see example_async_iterators.py")
+
     # Setup signal handler for graceful shutdown
     shutdown_event = asyncio.Event()
 
     def signal_handler() -> None:
-        print("\nShutdown signal received...")
+        logger.info("Shutdown signal received...")
         shutdown_event.set()
 
     # Register signal handlers
@@ -177,28 +185,31 @@ async def main() -> None:
         # Start the file manager
         await file_manager.start()
 
-        print(f"Client started with {file_manager.client.server_count} servers")
-        print("Waiting for connection and data...")
+        logger.info("Client started with %d servers", file_manager.client.server_count)
+        logger.info("Waiting for connection and data...")
 
         # Wait for shutdown signal
         await shutdown_event.wait()
 
     except KeyboardInterrupt:
-        print("\nKeyboard interrupt received")
-    except Exception as e:
-        print(f"Error: {e}")
+        logger.info("Keyboard interrupt received")
+    except Exception:
+        logger.exception("Error: Main loop exception")
         logger.exception("Main loop error")
     finally:
         # Stop client
-        print("Stopping client...")
-        await file_manager.stop(timeout=10.0)
-        print("Client stopped")
-        print("\nFinal Statistics:")
-        print(f"  Files saved: {file_saver.completed_files_count}")
-        print(f"  Files validated: {file_validator.validated_count}")
-        print(f"  Total files processed: {file_stats.total_files}")
-        print(f"  Total bytes received: {file_saver.total_bytes_received / 1024:.2f} KB")
-        print(f"  File types: {dict(sorted(file_stats.file_types.items()))}")
+        logger.info("Stopping client...")
+        await file_manager.stop(shutdown_timeout=10)
+        logger.info("Client stopped")
+        logger.info("Final Statistics:")
+        logger.info("  Files saved: %d", file_saver.completed_files_count)
+        logger.info("  Files validated: %d", file_validator.validated_count)
+        logger.info("  Total files processed: %d", file_stats.total_files)
+        logger.info(
+            "  Total bytes received: %.2f KB",
+            file_saver.total_bytes_received / 1024,
+        )
+        logger.info("  File types: %s", dict(sorted(file_stats.file_types.items())))
 
 
 def run_example() -> None:
@@ -206,9 +217,9 @@ def run_example() -> None:
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nExiting...")
+        logger.info("Exiting...")
     except Exception as e:  # noqa: BLE001
-        print(f"Fatal error: {e}")
+        logger.critical("Fatal error: %s", e)
         sys.exit(1)
 
 
