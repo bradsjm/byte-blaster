@@ -76,6 +76,7 @@ ignore = [
     "D203",    # Conflicts with D211 (no blank line before class docstring)
     "D213",    # Conflicts with D212 (multi-line summary on first line)
     "PLR2004", # Magic number literals
+    "COM812",  # Missing trailing comma in multi-line collections
 ]
 
 [tool.ruff.lint.pycodestyle]

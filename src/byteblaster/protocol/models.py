@@ -66,7 +66,7 @@ class QBTSegment:
             A string in the format "filename_timestamp" where timestamp is ISO-formatted.
 
         """
-        return f"{self.filename}_{self.timestamp.isoformat()}"
+        return f"{self.filename}_{self.timestamp.isoformat()}".lower()
 
     def __str__(self) -> str:
         """Generate a human-readable string representation of this QBT segment.
