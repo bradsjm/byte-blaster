@@ -59,7 +59,7 @@ def check_minimum_version() -> tuple[bool, list[str]]:
     if current_version < min_version:
         issues.append(
             f"Python {min_version[0]}.{min_version[1]}+ required, "
-            f"but {current_version[0]}.{current_version[1]} found"
+            f"but {current_version[0]}.{current_version[1]} found",
         )
         return False, issues
 
@@ -262,13 +262,13 @@ def generate_recommendations(result: CompatibilityResult) -> list[str]:
                 "🐳 Consider using Docker with Python 3.12+ image",
                 "🌐 Use pyenv or conda to manage Python versions",
                 "📦 Create virtual environment with compatible Python version",
-            ]
+            ],
         )
     else:
         current_version = sys.version_info[:2]
         if current_version == (3, 12):
             recommendations.append(
-                "✅ Great! Consider upgrading to Python 3.13 for better performance"
+                "✅ Great! Consider upgrading to Python 3.13 for better performance",
             )
         elif current_version >= (3, 13):
             recommendations.append("🚀 Excellent! You're using the latest Python version")
@@ -276,7 +276,7 @@ def generate_recommendations(result: CompatibilityResult) -> list[str]:
     # Feature-specific recommendations
     if not result.features_available.get("union_operator", True):
         recommendations.append(
-            "⚠️  Union operator (|) not available - upgrade for better type annotations"
+            "⚠️  Union operator (|) not available - upgrade for better type annotations",
         )
 
     if not result.features_available.get("performance_optimizations", True):

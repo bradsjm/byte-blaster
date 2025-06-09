@@ -15,7 +15,7 @@ from .crypto import (
     xor_encode,
     xor_encode_string,
 )
-from .manager import ServerListManager
+from .serverlist import ServerListManager
 
 __all__ = [
     "ServerListManager",

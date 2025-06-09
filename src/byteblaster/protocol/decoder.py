@@ -100,7 +100,7 @@ class ProtocolDecoder:
     HEADER_REGEX = re.compile(
         rb"^/PF(?P<PF>[A-Za-z0-9\-._]+)\s*/PN\s*(?P<PN>[0-9]+)\s*"
         rb"/PT\s*(?P<PT>[0-9]+)\s*/CS\s*(?P<CS>[0-9]+)\s*"
-        rb"/FD(?P<FD>[0-9/: ]+[AP]M)\s*(/DL(?P<DL>[0-9]+)\s*)?\r\n$"
+        rb"/FD(?P<FD>[0-9/: ]+[AP]M)\s*(/DL(?P<DL>[0-9]+)\s*)?\r\n$",
     )
 
     # Header date format
@@ -596,7 +596,7 @@ class ProtocolDecoder:
 
         if segment.block_number > segment.total_blocks:
             logger.error(
-                "Block number exceeds total: %d > %d", segment.block_number, segment.total_blocks
+                "Block number exceeds total: %d > %d", segment.block_number, segment.total_blocks,
             )
             return True
 

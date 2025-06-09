@@ -304,7 +304,7 @@ def main() -> None:
 
     if passed == len(results):
         logger.info(
-            "\n🎉 All validation checks passed! Your library is properly configured for typing."
+            "\n🎉 All validation checks passed! Your library is properly configured for typing.",
         )
         sys.exit(0)
     else:

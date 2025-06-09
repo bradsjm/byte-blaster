@@ -123,7 +123,7 @@ class ByteBlasterServerList:
 
     # Server list regex for parsing server list frames
     SERVER_LIST_REGEX: ClassVar[re.Pattern[str]] = re.compile(
-        r"^/ServerList/(?P<ServerList>.*?)(?:\\ServerList\\/SatServers/(?P<SatServers>.*?)\\SatServers\\)?$"
+        r"^/ServerList/(?P<ServerList>.*?)(?:\\ServerList\\/SatServers/(?P<SatServers>.*?)\\SatServers\\)?$",
     )
 
     # Instance attributes

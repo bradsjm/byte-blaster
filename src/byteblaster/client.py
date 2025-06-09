@@ -1024,7 +1024,7 @@ class ByteBlasterClient:
                 logger.exception("Sync segment handler error")
 
     async def _safe_async_handler_call(
-        self, handler: AsyncSegmentHandler, segment: QBTSegment
+        self, handler: AsyncSegmentHandler, segment: QBTSegment,
     ) -> None:
         """Safely call an async segment handler with error isolation."""
         try:

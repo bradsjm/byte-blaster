@@ -147,8 +147,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n👋 Goodbye!")  # noqa: T201
+        print("\n👋 Goodbye!")
     except Exception as e:
-        print(f"💥 Fatal error: {e}")  # noqa: T201
+        print(f"💥 Fatal error: {e}")
         logger.exception("Fatal error in main")
         sys.exit(1)

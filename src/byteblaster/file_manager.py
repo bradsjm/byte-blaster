@@ -131,7 +131,7 @@ class FileAssembler:
     """
 
     def __init__(
-        self, on_file_completed: FileCompletionCallback, duplicate_cache_size: int = 100
+        self, on_file_completed: FileCompletionCallback, duplicate_cache_size: int = 100,
     ) -> None:
         """Initialize the FileAssembler with completion callback and duplicate detection.
 
@@ -396,7 +396,7 @@ class ByteBlasterFileManager:
                 tg.create_task(self._safe_handler_call(handler, file))
 
     async def _safe_handler_call(
-        self, handler: FileCompletionCallback, file: CompletedFile
+        self, handler: FileCompletionCallback, file: CompletedFile,
     ) -> None:
         """Safely call a file completion handler with error isolation."""
         try:

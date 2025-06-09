@@ -376,7 +376,7 @@ def handle_bump_action(args: argparse.Namespace, current_version: Version) -> No
 
     # Commit changes
     add_result = run_command(
-        ["git", "add", "pyproject.toml", "src/byteblaster/__init__.py"], check=False
+        ["git", "add", "pyproject.toml", "src/byteblaster/__init__.py"], check=False,
     )
 
     if add_result.exit_code == 0:
@@ -434,7 +434,7 @@ def handle_release_action(args: argparse.Namespace) -> None:
     add_result = run_command(["git", "add", *files_to_commit], check=False)
     if add_result.exit_code == 0:
         commit_result = run_command(
-            ["git", "commit", "-m", f"release: version {new_version}"], check=False
+            ["git", "commit", "-m", f"release: version {new_version}"], check=False,
         )
         if commit_result.exit_code == 0:
             logger.info("✅ Committed release changes")

@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=none
 """Server list management with persistence and failover support.
 
 This module provides the ServerListManager class for handling ByteBlaster server
@@ -212,7 +213,10 @@ class ServerListManager:
         self._current_index += 1
 
         logger.debug(
-            "Selected server: %s:%d (index %d)", server[0], server[1], self._current_index - 1
+            "Selected server: %s:%d (index %d)",
+            server[0],
+            server[1],
+            self._current_index - 1,
         )
         return server
 

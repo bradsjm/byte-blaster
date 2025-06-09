@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Python implementation of the EMWIN QBT broadcast protocol for receiving weather data"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["pytest>=8.4.0"]
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Jonathan Bradshaw", email = "jb@nrgup.net" }]
@@ -29,7 +29,6 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = ["ruff>=0.11.12"]
-test = ["pytest>=8.4.0", "pytest-asyncio>=0.23.0", "pytest-mock>=3.14.0"]
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -48,14 +47,13 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "asyncio: marks tests as asyncio tests",
 ]
 minversion = "8.0"
 python_classes = ["Test*"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 testpaths = ["tests"]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 target-version = "py312"
@@ -69,7 +67,6 @@ extend-exclude = [
     "build",
     "dist",
     "typings",
-    "tests",
 ]
 
 [tool.ruff.lint]
@@ -79,7 +76,6 @@ ignore = [
     "D203",    # Conflicts with D211 (no blank line before class docstring)
     "D213",    # Conflicts with D212 (multi-line summary on first line)
     "PLR2004", # Magic number literals
-    "COM812",  # Use of `print` in production code
 ]
 
 [tool.ruff.lint.pycodestyle]
@@ -89,7 +85,15 @@ max-line-length = 120
 
 [dependency-groups]
 dev = ["build>=1.2.2.post1", "setuptools>=80.9.0", "wheel>=0.45.1"]
+test = ["pytest>=8.4.0", "pytest-asyncio>=1.0.0", "pytest-mock>=3.14.0"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]   # Allow asserts in test files
-"example.py" = ["T201"] # Allow print statements in examples
+"examples/**" = ["T201"] # Allow print statements in examples
+"tests/**" = [
+    "T201",   # Allow print statements in tests
+    "D100",   # Allow missing docstrings in test files
+    "D102",   # Allow missing docstrings in test classes
+    "D103",   # Allow missing docstrings in test methods
+    "S101",   # Use of 'assert' in production code
+    "SLF001", # Private member access
+]
