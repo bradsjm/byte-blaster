@@ -741,7 +741,9 @@ class TestByteBlasterClient:
     @pytest.mark.asyncio
     @patch("asyncio.create_task")
     async def test_byte_blaster_client_when_connection_made_then_starts_auth_and_watchdog(
-        self, client: ByteBlasterClient
+        self,
+        mock_create_task: MagicMock,  # noqa: ARG002
+        client: ByteBlasterClient,
     ) -> None:
         """Test on_connection_made starts authentication and watchdog."""
         # Set up mock protocol to avoid early return

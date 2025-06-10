@@ -79,25 +79,75 @@ def check_py_typed_marker() -> bool:
     return True
 
 
-def check_wheel_includes_py_typed() -> bool:
-    """Check if the built wheel includes py.typed.
+def _find_existing_wheel(dist_dir: Path) -> Path | None:
+    """Find an existing wheel file in the dist directory.
+
+    Args:
+        dist_dir: Path to the dist directory
 
     Returns:
-        True if wheel includes py.typed, False otherwise
+        Path to the wheel file if found, None otherwise
 
     """
-    wheel_path = None
-    dist_dir = Path("dist")
+    if not dist_dir.exists():
+        return None
 
-    if dist_dir.exists():
-        for wheel_file in dist_dir.glob("*.whl"):
-            wheel_path = wheel_file
-            break
+    for wheel_file in dist_dir.glob("*.whl"):
+        return wheel_file
+    return None
 
-    if not wheel_path:
-        logger.error("❌ No wheel file found in dist/")
+
+def _build_wheel_temporarily() -> bool:
+    """Build a wheel temporarily for validation.
+
+    Returns:
+        True if wheel was built successfully, False otherwise
+
+    """
+    logger.info("🔨 No existing wheel found, building temporarily...")
+
+    # Check if build command is available
+    build_check = run_command(["python", "-c", "import build; print('build module available')"])
+    if build_check.exit_code != 0:
+        logger.error("❌ Build module not available. Install with: uv add --dev build")
+        logger.error("   Cannot validate wheel contents without building")
         return False
 
+    result = run_command(["python", "-m", "build", "--wheel"])
+    if result.exit_code != 0:
+        logger.error("❌ Failed to build wheel")
+        logger.error("   stdout: %s", result.stdout)
+        logger.error("   stderr: %s", result.stderr)
+        return False
+
+    return True
+
+
+def _cleanup_temporary_build() -> None:
+    """Clean up temporary build artifacts."""
+    import shutil
+
+    logger.info("🧹 Cleaning up temporary build artifacts...")
+
+    dist_dir = Path("dist")
+    if dist_dir.exists():
+        shutil.rmtree(dist_dir)
+
+    build_dir = Path("build")
+    if build_dir.exists():
+        shutil.rmtree(build_dir)
+
+
+def _check_py_typed_in_wheel(wheel_path: Path) -> bool:
+    """Check if py.typed is included in the wheel.
+
+    Args:
+        wheel_path: Path to the wheel file
+
+    Returns:
+        True if py.typed is found in the wheel, False otherwise
+
+    """
     try:
         with zipfile.ZipFile(wheel_path) as zf:
             files = zf.namelist()
@@ -112,6 +162,37 @@ def check_wheel_includes_py_typed() -> bool:
     except (zipfile.BadZipFile, OSError):
         logger.exception("❌ Error reading wheel")
         return False
+
+
+def check_wheel_includes_py_typed() -> bool:
+    """Check if the built wheel includes py.typed.
+
+    Returns:
+        True if wheel includes py.typed, False otherwise
+
+    """
+    dist_dir = Path("dist")
+    wheel_path = _find_existing_wheel(dist_dir)
+    built_wheel_temporarily = False
+
+    # If no wheel exists, build one temporarily
+    if not wheel_path:
+        if not _build_wheel_temporarily():
+            return False
+        built_wheel_temporarily = True
+        wheel_path = _find_existing_wheel(dist_dir)
+
+    if not wheel_path:
+        logger.error("❌ No wheel file found in dist/ even after building")
+        return False
+
+    success = _check_py_typed_in_wheel(wheel_path)
+
+    # Clean up temporary build if we created it
+    if built_wheel_temporarily:
+        _cleanup_temporary_build()
+
+    return success
 
 
 def check_pyproject_toml_config() -> bool:
