@@ -69,9 +69,9 @@ from byteblaster.protocol.models import (
 )
 from byteblaster.utils import ServerListManager
 
-__version__ = "1.0.0"
-__author__ = "ByteBlaster Python Team"
-__email__ = "support@example.com"
+__version__ = "1.1.0-dev"
+__author__ = "Jonathan Bradshaw"
+__email__ = "jb@nrgup.net"
 
 __all__ = [
     "ByteBlasterClient",
