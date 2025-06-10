@@ -1,309 +1,317 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 1.2.3)'
-        required: true
-        type: string
-      prerelease:
-        description: 'Mark as pre-release'
-        required: false
-        type: boolean
-        default: false
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version to release (e.g., 1.2.3)"
+                required: true
+                type: string
+            prerelease:
+                description: "Mark as pre-release"
+                required: false
+                type: boolean
+                default: false
 
 permissions:
-  contents: write
-  id-token: write  # For trusted publishing to PyPI
+    contents: write
+    id-token: write # For trusted publishing to PyPI
 
 jobs:
-  validate-tag:
-    name: Validate Release Tag
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
-      is-prerelease: ${{ steps.check-prerelease.outputs.is-prerelease }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    validate-tag:
+        name: Validate Release Tag
+        runs-on: ubuntu-latest
+        outputs:
+            version: ${{ steps.get-version.outputs.version }}
+            is-prerelease: ${{ steps.check-prerelease.outputs.is-prerelease }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Get version from tag or input
-        id: get-version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
+            - name: Get version from tag or input
+              id: get-version
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                    VERSION="${{ github.event.inputs.version }}"
+                  else
+                    VERSION=${GITHUB_REF#refs/tags/v}
+                  fi
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+                  echo "Version: $VERSION"
 
-      - name: Check if pre-release
-        id: check-prerelease
-        run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          if [[ "$VERSION" =~ (alpha|beta|rc|dev) ]] || [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
-            echo "is-prerelease=true" >> $GITHUB_OUTPUT
-            echo "This is a pre-release"
-          else
-            echo "is-prerelease=false" >> $GITHUB_OUTPUT
-            echo "This is a stable release"
-          fi
+            - name: Check if pre-release
+              id: check-prerelease
+              run: |
+                  VERSION="${{ steps.get-version.outputs.version }}"
+                  if [[ "$VERSION" =~ (alpha|beta|rc|dev) ]] || [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+                    echo "is-prerelease=true" >> $GITHUB_OUTPUT
+                    echo "This is a pre-release"
+                  else
+                    echo "is-prerelease=false" >> $GITHUB_OUTPUT
+                    echo "This is a stable release"
+                  fi
 
-      - name: Validate version format
-        run: |
-          VERSION="${{ steps.get-version.outputs.version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\-\.]*)?$ ]]; then
-            echo "❌ Invalid version format: $VERSION"
-            echo "Expected format: X.Y.Z or X.Y.Z-suffix"
-            exit 1
-          fi
-          echo "✅ Version format is valid: $VERSION"
+            - name: Validate version format
+              run: |
+                  VERSION="${{ steps.get-version.outputs.version }}"
+                  if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9.-]*)?$ ]]; then
+                    echo "❌ Invalid version format: $VERSION"
+                    echo "Expected format: X.Y.Z or X.Y.Z-suffix"
+                    exit 1
+                  fi
+                  echo "✅ Version format is valid: $VERSION"
 
-  run-tests:
-    name: Run Full Test Suite
-    uses: ./.github/workflows/ci.yml
-    needs: validate-tag
+    run-tests:
+        name: Run Full Test Suite
+        uses: ./.github/workflows/ci.yml
+        needs: validate-tag
 
-  build-release:
-    name: Build Release Artifacts
-    runs-on: ubuntu-latest
-    needs: [validate-tag, run-tests]
-    outputs:
-      wheel-name: ${{ steps.build.outputs.wheel-name }}
-      sdist-name: ${{ steps.build.outputs.sdist-name }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    build-release:
+        name: Build Release Artifacts
+        runs-on: ubuntu-latest
+        needs: [validate-tag, run-tests]
+        outputs:
+            wheel-name: ${{ steps.build.outputs.wheel-name }}
+            sdist-name: ${{ steps.build.outputs.sdist-name }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-        with:
-          enable-cache: true
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
+              with:
+                  enable-cache: true
 
-      - name: Update version in pyproject.toml
-        run: |
-          VERSION="${{ needs.validate-tag.outputs.version }}"
-          sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-          echo "Updated version to $VERSION"
+            - name: Update version in pyproject.toml
+              run: |
+                  VERSION="${{ needs.validate-tag.outputs.version }}"
+                  sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+                  echo "Updated version to $VERSION"
 
-      - name: Install build dependencies
-        run: uv sync --dev
+            - name: Install build dependencies
+              run: uv sync --dev
 
-      - name: Build distribution
-        id: build
-        run: |
-          uv run python -m build
-          WHEEL_NAME=$(ls dist/*.whl | xargs basename)
-          SDIST_NAME=$(ls dist/*.tar.gz | xargs basename)
-          echo "wheel-name=$WHEEL_NAME" >> $GITHUB_OUTPUT
-          echo "sdist-name=$SDIST_NAME" >> $GITHUB_OUTPUT
-          echo "Built: $WHEEL_NAME and $SDIST_NAME"
+            - name: Build distribution
+              id: build
+              run: |
+                  uv run python -m build
+                  WHEEL_NAME=$(ls dist/*.whl | xargs basename)
+                  SDIST_NAME=$(ls dist/*.tar.gz | xargs basename)
+                  echo "wheel-name=$WHEEL_NAME" >> $GITHUB_OUTPUT
+                  echo "sdist-name=$SDIST_NAME" >> $GITHUB_OUTPUT
+                  echo "Built: $WHEEL_NAME and $SDIST_NAME"
 
-      - name: Verify build quality
-        run: |
-          # Check wheel contents
-          uv run python -c "
-          import zipfile
-          import sys
+            - name: Verify build quality
+              run: |
+                  # Check wheel contents
+                  uv run python -c "
+                  import zipfile
+                  import sys
+                  from pathlib import Path
 
-          wheel_files = list(Path('dist').glob('*.whl'))
-          if not wheel_files:
-              print('❌ No wheel files found')
-              sys.exit(1)
+                  wheel_files = list(Path('dist').glob('*.whl'))
+                  if not wheel_files:
+                      print('❌ No wheel files found')
+                      sys.exit(1)
 
-          wheel_path = wheel_files[0]
-          with zipfile.ZipFile(wheel_path) as z:
-              files = z.namelist()
+                  wheel_path = wheel_files[0]
+                  with zipfile.ZipFile(wheel_path) as z:
+                      files = z.namelist()
 
-              # Check for py.typed
-              if not any('py.typed' in f for f in files):
-                  print('❌ py.typed not found in wheel')
-                  sys.exit(1)
+                      # Check for py.typed
+                      if not any('py.typed' in f for f in files):
+                          print('❌ py.typed not found in wheel')
+                          sys.exit(1)
 
-              # Check for source files
-              if not any('.py' in f for f in files if 'byteblaster' in f):
-                  print('❌ No Python source files found')
-                  sys.exit(1)
+                      # Check for source files
+                      if not any('.py' in f for f in files if 'byteblaster' in f):
+                          print('❌ No Python source files found')
+                          sys.exit(1)
 
-              print('✅ Wheel validation passed')
-          "
+                      print('✅ Wheel validation passed')
+                  "
 
-      - name: Check package metadata
-        run: |
-          uv add --dev twine
-          uv run twine check dist/*
+            - name: Check package metadata
+              run: |
+                  uv add --dev twine
+                  uv run twine check dist/*
 
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-dist
-          path: dist/
-          retention-days: 30
+            - name: Upload release artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist/
+                  retention-days: 30
 
-  security-scan:
-    name: Security Scan Release
-    runs-on: ubuntu-latest
-    needs: build-release
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    security-scan:
+        name: Security Scan Release
+        runs-on: ubuntu-latest
+        needs: build-release
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+            - name: Set up Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.12"
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
+            - name: Install uv
+              uses: astral-sh/setup-uv@v3
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-dist
-          path: dist/
+            - name: Download artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist/
 
-      - name: Install and scan package
-        run: |
-          uv venv test-env
-          source test-env/bin/activate
-          pip install dist/*.whl
-          pip install safety bandit
+            - name: Install and scan package
+              run: |
+                  uv venv test-env
+                  source test-env/bin/activate
+                  pip install dist/*.whl
+                  pip install safety bandit
 
-          # Security scan
-          safety check
-          bandit -r test-env/lib/python*/site-packages/byteblaster/ -f json -o security-report.json || true
+                  # Security scan
+                  safety check
+                  bandit -r test-env/lib/python*/site-packages/byteblaster/ -f json -o security-report.json || true
 
-      - name: Upload security report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: security-report
-          path: security-report.json
+            - name: Upload security report
+              uses: actions/upload-artifact@v4
+              if: always()
+              with:
+                  name: security-report
+                  path: security-report.json
 
-  publish-pypi:
-    name: Publish to PyPI
-    runs-on: ubuntu-latest
-    needs: [validate-tag, build-release, security-scan]
-    environment:
-      name: pypi
-      url: https://pypi.org/p/byte-blaster
-    steps:
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-dist
-          path: dist/
+    publish-pypi:
+        name: Publish to PyPI
+        runs-on: ubuntu-latest
+        needs: [validate-tag, build-release, security-scan]
+        environment:
+            name: pypi
+            url: https://pypi.org/p/byte-blaster
+        steps:
+            - name: Download release artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          print-hash: true
-          attestations: true
+            - name: Publish to PyPI
+              uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                  print-hash: true
+                  attestations: true
 
-  create-github-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [validate-tag, build-release, publish-pypi]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    create-github-release:
+        name: Create GitHub Release
+        runs-on: ubuntu-latest
+        needs: [validate-tag, build-release, publish-pypi]
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-dist
-          path: dist/
+            - name: Download release artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  name: release-dist
+                  path: dist/
 
-      - name: Generate release notes
-        id: release-notes
-        run: |
-          VERSION="${{ needs.validate-tag.outputs.version }}"
+            - name: Generate release notes
+              id: release-notes
+              run: |
+                  VERSION="${{ needs.validate-tag.outputs.version }}"
 
-          # Get the previous tag
-          PREV_TAG=$(git tag --sort=-version:refname | grep -v "v$VERSION" | head -n1)
+                  # Get the previous tag
+                  PREV_TAG=$(git tag --sort=-version:refname | grep -v "v$VERSION" | head -n1)
 
-          echo "## What's Changed" > release_notes.md
-          echo "" >> release_notes.md
+                  echo "## What's Changed" > release_notes.md
+                  echo "" >> release_notes.md
 
-          if [ ! -z "$PREV_TAG" ]; then
-            echo "### Commits since $PREV_TAG" >> release_notes.md
-            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> release_notes.md
-            echo "" >> release_notes.md
-          fi
+                  if [ ! -z "$PREV_TAG" ]; then
+                    echo "### Commits since $PREV_TAG" >> release_notes.md
+                    git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> release_notes.md
+                    echo "" >> release_notes.md
+                  fi
 
-          echo "" >> release_notes.md
-          echo "## Installation" >> release_notes.md
-          echo "" >> release_notes.md
-          echo '```bash' >> release_notes.md
-          echo "pip install byte-blaster==$VERSION" >> release_notes.md
-          echo '```' >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Package Files" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "- 📦 **Wheel**: \`${{ needs.build-release.outputs.wheel-name }}\`" >> release_notes.md
-          echo "- 📦 **Source**: \`${{ needs.build-release.outputs.sdist-name }}\`" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "## Verification" >> release_notes.md
-          echo "" >> release_notes.md
-          echo "This release includes:" >> release_notes.md
-          echo "- ✅ Full type information (\`py.typed\`)" >> release_notes.md
-          echo "- ✅ Security scanning passed" >> release_notes.md
-          echo "- ✅ Cross-platform testing (Linux, Windows, macOS)" >> release_notes.md
-          echo "- ✅ Python 3.12+ compatibility" >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo "## Installation" >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo '```bash' >> release_notes.md
+                  echo "pip install byte-blaster==$VERSION" >> release_notes.md
+                  echo '```' >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo "## Package Files" >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo "- 📦 **Wheel**: \`${{ needs.build-release.outputs.wheel-name }}\`" >> release_notes.md
+                  echo "- 📦 **Source**: \`${{ needs.build-release.outputs.sdist-name }}\`" >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo "## Verification" >> release_notes.md
+                  echo "" >> release_notes.md
+                  echo "This release includes:" >> release_notes.md
+                  echo "- ✅ Full type information (\`py.typed\`)" >> release_notes.md
+                  echo "- ✅ Security scanning passed" >> release_notes.md
+                  echo "- ✅ Cross-platform testing (Linux, Windows, macOS)" >> release_notes.md
+                  echo "- ✅ Python 3.12+ compatibility" >> release_notes.md
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.validate-tag.outputs.version }}
-          name: Release v${{ needs.validate-tag.outputs.version }}
-          body_path: release_notes.md
-          files: |
-            dist/*
-          prerelease: ${{ needs.validate-tag.outputs.is-prerelease == 'true' }}
-          generate_release_notes: true
-          make_latest: ${{ needs.validate-tag.outputs.is-prerelease == 'false' }}
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: v${{ needs.validate-tag.outputs.version }}
+                  name: Release v${{ needs.validate-tag.outputs.version }}
+                  body_path: release_notes.md
+                  files: |
+                      dist/*
+                  prerelease: ${{ needs.validate-tag.outputs.is-prerelease == 'true' }}
+                  generate_release_notes: true
+                  make_latest: ${{ needs.validate-tag.outputs.is-prerelease == 'false' }}
 
-  notify-success:
-    name: Notify Release Success
-    runs-on: ubuntu-latest
-    needs: [validate-tag, create-github-release]
-    if: success()
-    steps:
-      - name: Release Success Summary
-        run: |
-          echo "🎉 Release v${{ needs.validate-tag.outputs.version }} completed successfully!"
-          echo ""
-          echo "📦 Published to PyPI: https://pypi.org/project/byte-blaster/${{ needs.validate-tag.outputs.version }}/"
-          echo "📋 GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.validate-tag.outputs.version }}"
-          echo ""
-          echo "Installation command:"
-          echo "pip install byte-blaster==${{ needs.validate-tag.outputs.version }}"
+    notify-success:
+        name: Notify Release Success
+        runs-on: ubuntu-latest
+        needs: [validate-tag, create-github-release]
+        if: success()
+        steps:
+            - name: Release Success Summary
+              run: |
+                  echo "🎉 Release v${{ needs.validate-tag.outputs.version }} completed successfully!"
+                  echo ""
+                  echo "📦 Published to PyPI: https://pypi.org/project/byte-blaster/${{ needs.validate-tag.outputs.version }}/"
+                  echo "📋 GitHub Release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.validate-tag.outputs.version }}"
+                  echo ""
+                  echo "Installation command:"
+                  echo "pip install byte-blaster==${{ needs.validate-tag.outputs.version }}"
 
-  notify-failure:
-    name: Notify Release Failure
-    runs-on: ubuntu-latest
-    needs: [validate-tag, build-release, security-scan, publish-pypi, create-github-release]
-    if: failure()
-    steps:
-      - name: Release Failure Summary
-        run: |
-          echo "❌ Release v${{ needs.validate-tag.outputs.version }} failed!"
-          echo ""
-          echo "Please check the workflow logs and fix any issues before retrying."
-          echo "You may need to:"
-          echo "- Fix any test failures"
-          echo "- Address security issues"
-          echo "- Update version numbers"
-          echo "- Check PyPI publishing credentials"
+    notify-failure:
+        name: Notify Release Failure
+        runs-on: ubuntu-latest
+        needs:
+            [
+                validate-tag,
+                build-release,
+                security-scan,
+                publish-pypi,
+                create-github-release,
+            ]
+        if: failure()
+        steps:
+            - name: Release Failure Summary
+              run: |
+                  echo "❌ Release v${{ needs.validate-tag.outputs.version }} failed!"
+                  echo ""
+                  echo "Please check the workflow logs and fix any issues before retrying."
+                  echo "You may need to:"
+                  echo "- Fix any test failures"
+                  echo "- Address security issues"
+                  echo "- Update version numbers"
+                  echo "- Check PyPI publishing credentials"
