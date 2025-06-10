@@ -82,8 +82,10 @@ class SegmentStream:
     async def __anext__(self) -> QBTSegment:
         """Get next segment from stream."""
         while True:
+            if self._closed:
+                raise StopAsyncIteration
             item = await self._queue.get()
-            if item is None or self._closed:
+            if item is None:
                 raise StopAsyncIteration
             return item
 
@@ -1024,7 +1026,9 @@ class ByteBlasterClient:
                 logger.exception("Sync segment handler error")
 
     async def _safe_async_handler_call(
-        self, handler: AsyncSegmentHandler, segment: QBTSegment,
+        self,
+        handler: AsyncSegmentHandler,
+        segment: QBTSegment,
     ) -> None:
         """Safely call an async segment handler with error isolation."""
         try:

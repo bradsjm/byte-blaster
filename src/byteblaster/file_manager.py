@@ -131,7 +131,9 @@ class FileAssembler:
     """
 
     def __init__(
-        self, on_file_completed: FileCompletionCallback, duplicate_cache_size: int = 100,
+        self,
+        on_file_completed: FileCompletionCallback,
+        duplicate_cache_size: int = 100,
     ) -> None:
         """Initialize the FileAssembler with completion callback and duplicate detection.
 
@@ -184,7 +186,7 @@ class FileAssembler:
 
         # Check if this is a duplicate of a recently completed file
         if file_key in self._recently_completed:
-            logger.info("Skipping segment for duplicate file: %s", file_key)
+            logger.debug("Skipping segment for duplicate file: %s", file_key)
             return
 
         # Skip FILLFILE.TXT - it's filler data when no real data is being transmitted
@@ -396,7 +398,9 @@ class ByteBlasterFileManager:
                 tg.create_task(self._safe_handler_call(handler, file))
 
     async def _safe_handler_call(
-        self, handler: FileCompletionCallback, file: CompletedFile,
+        self,
+        handler: FileCompletionCallback,
+        file: CompletedFile,
     ) -> None:
         """Safely call a file completion handler with error isolation."""
         try:

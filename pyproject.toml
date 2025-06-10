@@ -85,7 +85,13 @@ max-line-length = 120
 [tool.ruff.format]
 
 [dependency-groups]
-dev = ["build>=1.2.2.post1", "setuptools>=80.9.0", "wheel>=0.45.1"]
+dev = [
+    "basedpyright>=1.29.2",
+    "build>=1.2.2.post1",
+    "ruff>=0.11.13",
+    "setuptools>=80.9.0",
+    "wheel>=0.45.1",
+]
 test = ["pytest>=8.4.0", "pytest-asyncio>=1.0.0", "pytest-mock>=3.14.0"]
 
 [tool.ruff.lint.per-file-ignores]
