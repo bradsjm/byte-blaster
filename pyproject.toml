@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Python implementation of the EMWIN QBT broadcast protocol for receiving weather data"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["pytest>=8.4.0"]
+dependencies = []
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Jonathan Bradshaw", email = "jb@nrgup.net" }]
@@ -96,6 +96,7 @@ dev = [
 test = ["pytest>=8.4.0", "pytest-asyncio>=1.0.0", "pytest-mock>=3.14.0"]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/**" = ["ALL"]
 "examples/**" = ["T201"] # Allow print statements in examples
 "tests/**" = [
     "T201",   # Allow print statements in tests
