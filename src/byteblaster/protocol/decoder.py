@@ -596,7 +596,9 @@ class ProtocolDecoder:
 
         if segment.block_number > segment.total_blocks:
             logger.error(
-                "Block number exceeds total: %d > %d", segment.block_number, segment.total_blocks,
+                "Block number exceeds total: %d > %d",
+                segment.block_number,
+                segment.total_blocks,
             )
             return True
 
