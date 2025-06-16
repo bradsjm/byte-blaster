@@ -51,19 +51,17 @@ jobs:
             - name: Run tests with updated dependencies
               if: steps.update.outputs.dependencies-updated == 'true'
               run: |
-                  uv sync --all-groups
+                  uv sync --dev --group test
                   uv run pytest
 
             - name: Run type checking
               if: steps.update.outputs.dependencies-updated == 'true'
               run: |
-                  uv add --dev basedpyright
                   uv run basedpyright src/byteblaster
 
             - name: Run linting
               if: steps.update.outputs.dependencies-updated == 'true'
               run: |
-                  uv add --dev ruff
                   uv run ruff check
                   uv run ruff format --check
 
@@ -133,7 +131,7 @@ jobs:
                   enable-cache: true
 
             - name: Install dependencies
-              run: uv sync --all-groups
+              run: uv sync --dev
 
             - name: Run security audit
               run: |
