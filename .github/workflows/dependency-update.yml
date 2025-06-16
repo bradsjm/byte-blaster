@@ -51,7 +51,7 @@ jobs:
             - name: Run tests with updated dependencies
               if: steps.update.outputs.dependencies-updated == 'true'
               run: |
-                  uv sync --dev
+                  uv sync --all-groups
                   uv run pytest
 
             - name: Run type checking
@@ -63,6 +63,7 @@ jobs:
             - name: Run linting
               if: steps.update.outputs.dependencies-updated == 'true'
               run: |
+                  uv add --dev ruff
                   uv run ruff check
                   uv run ruff format --check
 
@@ -132,7 +133,7 @@ jobs:
                   enable-cache: true
 
             - name: Install dependencies
-              run: uv sync --dev
+              run: uv sync --all-groups
 
             - name: Run security audit
               run: |
