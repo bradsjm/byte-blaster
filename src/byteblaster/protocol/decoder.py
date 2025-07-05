@@ -7,6 +7,7 @@ protocol frames and data segments.
 
 import logging
 import re
+import zlib
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import Enum
@@ -710,8 +711,6 @@ class ProtocolDecoder:
 
         """
         try:
-            import zlib
-
             uncompressed_data = zlib.decompress(segment.content)
 
             # Checksum should be calculated on uncompressed data
